@@ -6,7 +6,7 @@ from rest_framework.permissions import SAFE_METHODS, BasePermission
 from rest_framework.response import Response
 
 from .audit import record_audit
-from .compliance import ensure_baseline_controls, evaluate_compliance
+from .compliance import evaluate_compliance
 from .models import (
     ComplianceControl,
     ComplianceException,
@@ -15,6 +15,7 @@ from .models import (
     ComplianceRun,
 )
 from .rbac import CLOUD_ADMIN, PLATFORM_ADMIN, SECURITY_ENGINEER, user_has_role
+
 
 class ComplianceWritePermission(BasePermission):
     def has_permission(self, request, view):
@@ -185,7 +186,6 @@ def evaluate(request):
 @api_view(["GET"])
 @permission_classes([ComplianceWritePermission])
 def summary(request):
-    ensure_baseline_controls()
     now = timezone.now()
     active_findings = ComplianceFinding.objects.exclude(status=ComplianceFinding.Status.RESOLVED)
     active_exceptions = ComplianceException.objects.filter(is_active=True).filter(
