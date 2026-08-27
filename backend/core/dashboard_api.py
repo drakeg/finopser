@@ -9,7 +9,6 @@ from rest_framework.response import Response
 from .models import CloudAccount, CloudResource, CostRecord, CostSync, InventorySync
 from .rbac import GovernancePermission
 
-
 SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 INVENTORY_STALE_AFTER = timedelta(hours=24)
 
