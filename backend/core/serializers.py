@@ -3,7 +3,15 @@ import re
 from django.contrib.auth.models import Group, User
 from rest_framework import serializers
 
-from .models import AuditEvent, CloudAccount, Organization, OrganizationNode, Project
+from .models import (
+    AuditEvent,
+    CloudAccount,
+    CloudResource,
+    InventorySync,
+    Organization,
+    OrganizationNode,
+    Project,
+)
 from .rbac import MANAGED_ROLES
 
 
@@ -100,12 +108,57 @@ class CloudAccountSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         provider = attrs.get("provider") or getattr(self.instance, "provider", CloudAccount.Provider.AWS)
         if provider != CloudAccount.Provider.AWS:
-            raise serializers.ValidationError({"provider": "AWS is the only supported provider in Sprint 3."})
+            raise serializers.ValidationError({"provider": "AWS is the only supported provider in Sprint 4."})
         organization = attrs.get("organization") or getattr(self.instance, "organization", None)
         project = attrs.get("project") if "project" in attrs else getattr(self.instance, "project", None)
         if project and organization and project.organization_id != organization.id:
             raise serializers.ValidationError({"project": "Project must belong to the same organization."})
         return attrs
+
+
+class CloudResourceSerializer(serializers.ModelSerializer):
+    account_name = serializers.CharField(source="cloud_account.name", read_only=True)
+
+    class Meta:
+        model = CloudResource
+        fields = [
+            "id",
+            "provider",
+            "cloud_account",
+            "account_name",
+            "provider_resource_id",
+            "resource_type",
+            "name",
+            "region",
+            "state",
+            "is_active",
+            "first_seen",
+            "last_seen",
+            "metadata",
+            "tags",
+        ]
+        read_only_fields = fields
+
+
+class InventorySyncSerializer(serializers.ModelSerializer):
+    account_name = serializers.CharField(source="cloud_account.name", read_only=True)
+
+    class Meta:
+        model = InventorySync
+        fields = [
+            "id",
+            "cloud_account",
+            "account_name",
+            "status",
+            "started_at",
+            "completed_at",
+            "discovered_count",
+            "created_count",
+            "updated_count",
+            "stale_count",
+            "errors",
+        ]
+        read_only_fields = fields
 
 
 class AuditEventSerializer(serializers.ModelSerializer):

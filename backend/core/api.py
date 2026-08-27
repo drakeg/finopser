@@ -1,16 +1,28 @@
 from django.contrib.auth.models import User
+from django.db.models import Count
 from django.utils import timezone
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from .audit import record_audit
-from .models import AuditEvent, CloudAccount, Organization, OrganizationNode, Project
+from .inventory import sync_inventory
+from .models import (
+    AuditEvent,
+    CloudAccount,
+    CloudResource,
+    InventorySync,
+    Organization,
+    OrganizationNode,
+    Project,
+)
 from .providers import ProviderValidationError, get_provider
 from .rbac import GovernancePermission, PlatformAdminPermission
 from .serializers import (
     AuditEventSerializer,
     CloudAccountSerializer,
+    CloudResourceSerializer,
+    InventorySyncSerializer,
     OrganizationNodeSerializer,
     OrganizationSerializer,
     ProjectSerializer,
@@ -114,6 +126,93 @@ class CloudAccountViewSet(AuditedModelViewSet):
             {"provider": account.provider, "provider_account_id": result.provider_account_id},
         )
         return Response(self.get_serializer(account).data)
+
+    @action(detail=True, methods=["post"], url_path="sync-inventory")
+    def sync_inventory_action(self, request, pk=None):
+        account = self.get_object()
+        if account.status != CloudAccount.Status.VALID:
+            return Response(
+                {"error": "Cloud account must be validated before inventory sync."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        record_audit(request.user, "inventory_sync_requested", account)
+        sync = sync_inventory(account)
+        record_audit(
+            request.user,
+            f"inventory_sync_{sync.status}",
+            account,
+            {
+                "sync_id": sync.id,
+                "discovered_count": sync.discovered_count,
+                "errors": len(sync.errors),
+            },
+        )
+        response_status = (
+            status.HTTP_200_OK
+            if sync.status in {InventorySync.Status.SUCCESS, InventorySync.Status.PARTIAL}
+            else status.HTTP_400_BAD_REQUEST
+        )
+        return Response(InventorySyncSerializer(sync).data, status=response_status)
+
+
+class CloudResourceViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    serializer_class = CloudResourceSerializer
+    permission_classes = [GovernancePermission]
+
+    def get_queryset(self):
+        queryset = CloudResource.objects.select_related("cloud_account").all()
+        filters = {
+            "cloud_account_id": self.request.query_params.get("cloud_account"),
+            "resource_type": self.request.query_params.get("resource_type"),
+            "region": self.request.query_params.get("region"),
+            "state": self.request.query_params.get("state"),
+        }
+        for field, value in filters.items():
+            if value:
+                queryset = queryset.filter(**{field: value})
+        active = self.request.query_params.get("active")
+        if active in {"true", "false"}:
+            queryset = queryset.filter(is_active=active == "true")
+        return queryset
+
+    @action(detail=False, methods=["get"], url_path="summary")
+    def summary(self, request):
+        queryset = self.get_queryset()
+        active = queryset.filter(is_active=True)
+        by_type = list(
+            active.values("resource_type")
+            .annotate(count=Count("id"))
+            .order_by("-count", "resource_type")
+        )
+        return Response(
+            {
+                "total": queryset.count(),
+                "active": active.count(),
+                "inactive": queryset.filter(is_active=False).count(),
+                "by_type": by_type,
+            }
+        )
+
+
+class InventorySyncViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    serializer_class = InventorySyncSerializer
+    permission_classes = [GovernancePermission]
+
+    def get_queryset(self):
+        queryset = InventorySync.objects.select_related("cloud_account").all()
+        cloud_account = self.request.query_params.get("cloud_account")
+        if cloud_account:
+            queryset = queryset.filter(cloud_account_id=cloud_account)
+        return queryset
 
 
 class AuditEventViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
