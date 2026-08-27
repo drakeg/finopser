@@ -179,6 +179,7 @@ class AWSProvider:
                                             "AvailabilityZone", ""
                                         )
                                     ),
+                                    "public_ip_address": str(instance.get("PublicIpAddress", "")),
                                 },
                             )
                         )
@@ -205,6 +206,8 @@ class AWSProvider:
                                 "engine": str(database.get("Engine", "")),
                                 "instance_class": str(database.get("DBInstanceClass", "")),
                                 "multi_az": bool(database.get("MultiAZ", False)),
+                                "publicly_accessible": bool(database.get("PubliclyAccessible", False)),
+                                "storage_encrypted": bool(database.get("StorageEncrypted", False)),
                             },
                         )
                     )
