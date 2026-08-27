@@ -1,173 +1,19 @@
-# Initial Domain Model
+# Domain Model
 
-## Organizational Hierarchy
+## Organization hierarchy
 
-The platform supports hierarchical governance through recursive organizational nodes.
+`Organization` is the top-level governance container. `OrganizationNode` is recursively nestable through `parent`, allowing business units, departments, teams, environments, and future node types without schema redesign. `Project` belongs to one organization and one node in that same organization.
 
-```text
-Tenant
-`-- Organization
-    |-- Organizational Unit
-    |   |-- Project
-    |   |   |-- Cloud Account
-    |   |   `-- Cloud Account
-    |   `-- Project
-    `-- Organizational Unit
-```
+The model intentionally prepares for inheritance: future policies, budgets, access rules, and compliance controls can be attached at an organization or node scope and resolved down the parent chain.
 
-A recursive internal node model avoids hard-coding a fixed organizational depth:
+## Identity and RBAC
 
-```text
-OrganizationNode
-- id
-- parent_id
-- node_type
-- name
-```
+Sprint 2 uses Django users and groups as the identity and managed-role foundation. Managed roles are Platform Administrator, Cloud Administrator, FinOps Analyst, Security / Compliance Engineer, Project Owner, and Auditor. Organization/project mutation is limited to Platform and Cloud Administrators; role assignment is limited to Platform Administrators. All authorization is enforced server-side.
 
-Projects and cloud accounts attach to appropriate scopes.
+## Audit
 
-## Inheritance
+`AuditEvent` captures actor, action, object type/id/representation, structured metadata, and timestamp for privileged governance mutations. Audit events are read-only through both the API and Django administration.
 
-Governance objects may be assigned high in the hierarchy and inherited by descendants. Candidate inheritable objects include:
+## Future core entities
 
-- policies;
-- compliance controls;
-- budgets;
-- access rules;
-- required tags;
-- automation rules.
-
-Effective configuration is conceptually:
-
-```text
-direct configuration
-+ inherited configuration
-- approved exceptions
-```
-
-Override and conflict rules require an explicit ADR before implementation.
-
-## Core Domain Objects
-
-### Identity and Access
-
-- User
-- Group
-- Role
-- Permission
-
-### Organization
-
-- Organization
-- OrganizationNode
-- Project
-
-### Cloud
-
-- CloudProvider
-- CloudAccount
-- CloudCredentialReference
-- CloudRegion
-- CloudResource
-- ResourceTag
-
-### FinOps
-
-- CostRecord
-- CostAllocation
-- Budget
-- BudgetThreshold
-
-### Governance
-
-- Policy
-- PolicyAssignment
-- PolicyException
-- ComplianceFramework
-- ComplianceControl
-- ComplianceCheck
-- ComplianceFinding
-
-### Recommendations and Automation
-
-- Recommendation
-- Remediation
-- AutomationJob
-- AutomationRun
-
-### Platform
-
-- Notification
-- AuditEvent
-
-## Normalized Cloud Resource
-
-Provider inventory is normalized around common searchable fields while preserving provider-specific metadata.
-
-Conceptual fields:
-
-```text
-id
-provider
-account
-provider_resource_id
-resource_type
-name
-region
-state
-first_seen
-last_seen
-metadata
-```
-
-For AWS, `provider_resource_id` will normally be an ARN where one exists.
-
-## Cost Dimensions
-
-The FinOps model should support, at minimum:
-
-- date;
-- provider;
-- account;
-- project;
-- organizational node;
-- service;
-- region;
-- usage type;
-- resource;
-- tags;
-- cost;
-- currency.
-
-## Compliance Lifecycle
-
-```text
-Framework
-  -> Control
-    -> Check
-      -> Finding
-```
-
-Proposed finding states:
-
-- OPEN
-- ACKNOWLEDGED
-- EXEMPTED
-- REMEDIATION_PENDING
-- RESOLVED
-- SUPPRESSED
-
-Exceptions should record reason, approver, creation time, expiration, and scope.
-
-## Recommendations
-
-Recommendations are separate from compliance findings. A recommendation should be able to record:
-
-- category;
-- evidence;
-- confidence;
-- estimated savings where applicable;
-- risk;
-- proposed action;
-- status.
+CloudAccount, CloudResource, CostRecord, Budget, Policy, ComplianceControl, ComplianceFinding, Recommendation, Remediation, and AutomationRun remain planned domain entities and will be introduced only in their approved Sprints.
