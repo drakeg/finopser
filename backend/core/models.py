@@ -52,6 +52,41 @@ class Project(models.Model):
         return self.name
 
 
+class CloudAccount(models.Model):
+    class Provider(models.TextChoices):
+        AWS = "aws", "Amazon Web Services"
+
+    class Status(models.TextChoices):
+        UNVALIDATED = "unvalidated", "Unvalidated"
+        VALID = "valid", "Valid"
+        INVALID = "invalid", "Invalid"
+
+    provider = models.CharField(max_length=32, choices=Provider.choices, default=Provider.AWS)
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="cloud_accounts")
+    project = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True, related_name="cloud_accounts")
+    name = models.CharField(max_length=200)
+    provider_account_id = models.CharField(max_length=64)
+    role_arn = models.CharField(max_length=512)
+    external_id = models.CharField(max_length=255, blank=True)
+    status = models.CharField(max_length=32, choices=Status.choices, default=Status.UNVALIDATED)
+    last_validated_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.CharField(max_length=255, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["provider", "provider_account_id"],
+                name="uniq_provider_account_id",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.provider_account_id})"
+
+
 class AuditEvent(models.Model):
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     action = models.CharField(max_length=100)

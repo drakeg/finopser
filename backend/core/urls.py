@@ -4,6 +4,7 @@ from rest_framework.routers import DefaultRouter
 from . import views
 from .api import (
     AuditEventViewSet,
+    CloudAccountViewSet,
     OrganizationNodeViewSet,
     OrganizationViewSet,
     ProjectViewSet,
@@ -14,6 +15,7 @@ router = DefaultRouter()
 router.register("organizations", OrganizationViewSet)
 router.register("organization-nodes", OrganizationNodeViewSet)
 router.register("projects", ProjectViewSet)
+router.register("cloud-accounts", CloudAccountViewSet)
 router.register("audit-events", AuditEventViewSet)
 router.register("users", UserRoleViewSet)
 

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import AuditEvent, Organization, OrganizationNode, Project
+from .models import AuditEvent, CloudAccount, Organization, OrganizationNode, Project
 
 
 @admin.register(Organization)
@@ -21,6 +21,14 @@ class ProjectAdmin(admin.ModelAdmin):
     list_display = ("name", "organization", "node", "owner")
     list_filter = ("organization",)
     search_fields = ("name", "owner")
+
+
+@admin.register(CloudAccount)
+class CloudAccountAdmin(admin.ModelAdmin):
+    list_display = ("name", "provider", "provider_account_id", "organization", "status")
+    list_filter = ("provider", "status", "organization")
+    search_fields = ("name", "provider_account_id", "role_arn")
+    readonly_fields = ("status", "last_validated_at", "last_error", "metadata")
 
 
 @admin.register(AuditEvent)
