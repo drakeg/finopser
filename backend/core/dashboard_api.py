@@ -1,4 +1,3 @@
-from calendar import monthrange
 from datetime import timedelta
 from decimal import Decimal
 
@@ -29,7 +28,7 @@ def _previous_month_period(today):
     current_start = today.replace(day=1)
     previous_month_end = current_start - timedelta(days=1)
     previous_start = previous_month_end.replace(day=1)
-    comparable_days = min(today.day, monthrange(previous_start.year, previous_start.month)[1])
+    comparable_days = min(today.day, previous_month_end.day)
     previous_end = previous_start + timedelta(days=comparable_days)
     return previous_start, previous_end
 
