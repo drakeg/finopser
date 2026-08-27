@@ -3,6 +3,58 @@ from django.conf import settings
 from django.db import migrations, models
 
 
+def seed_baseline_controls(apps, schema_editor):
+    framework_model = apps.get_model("core", "ComplianceFramework")
+    control_model = apps.get_model("core", "ComplianceControl")
+    framework = framework_model.objects.create(
+        code="FINOPSER-AWS-BASELINE",
+        name="Finopser AWS Baseline",
+        version="1.0",
+        description="Initial evidence-backed AWS compliance baseline.",
+        enabled=True,
+    )
+    controls = [
+        (
+            "AWS-EC2-001",
+            "EC2 instances should not have a public IPv4 address",
+            "Flags active EC2 instances with a persisted public IPv4 address.",
+            "high",
+            "aws.ec2.instance",
+            "ec2_public_ipv4",
+        ),
+        (
+            "AWS-RDS-001",
+            "RDS instances should not be publicly accessible",
+            "Flags RDS instances whose persisted PubliclyAccessible value is true.",
+            "high",
+            "aws.rds.db_instance",
+            "rds_public_access",
+        ),
+        (
+            "AWS-RDS-002",
+            "RDS storage should be encrypted",
+            "Flags RDS instances whose persisted StorageEncrypted value is false.",
+            "high",
+            "aws.rds.db_instance",
+            "rds_storage_encryption",
+        ),
+    ]
+    control_model.objects.bulk_create(
+        [
+            control_model(
+                framework=framework,
+                code=code,
+                title=title,
+                description=description,
+                severity=severity,
+                resource_type=resource_type,
+                check_key=check_key,
+            )
+            for code, title, description, severity, resource_type, check_key in controls
+        ]
+    )
+
+
 class Migration(migrations.Migration):
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
@@ -87,4 +139,5 @@ class Migration(migrations.Migration):
             model_name="compliancefinding",
             constraint=models.UniqueConstraint(fields=("control", "resource"), name="uniq_compliance_finding_control_resource"),
         ),
+        migrations.RunPython(seed_baseline_controls, migrations.RunPython.noop),
     ]
