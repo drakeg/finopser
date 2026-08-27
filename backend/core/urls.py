@@ -13,6 +13,7 @@ from .api import (
     UserRoleViewSet,
 )
 from .cost_api import CostRecordViewSet, CostSyncViewSet, sync_account_costs
+from .dashboard_api import operational_dashboard
 
 router = DefaultRouter()
 router.register("organizations", OrganizationViewSet)
@@ -32,6 +33,7 @@ urlpatterns = [
     path("ready/", views.ready, name="ready"),
     path("auth/session/", views.session, name="session"),
     path("auth/me/", views.me, name="me"),
+    path("dashboard/", operational_dashboard, name="operational-dashboard"),
     path("cloud-accounts/<int:pk>/sync-costs/", sync_account_costs, name="sync-account-costs"),
     path("", include(router.urls)),
 ]
