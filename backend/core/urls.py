@@ -1,8 +1,10 @@
 from django.urls import path
+
 from . import views
 
 urlpatterns = [
     path("", views.root, name="api-root"),
     path("health/", views.health, name="health"),
     path("ready/", views.ready, name="ready"),
+    path("auth/session/", views.session, name="session"),
 ]
