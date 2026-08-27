@@ -1,7 +1,9 @@
+import re
+
 from django.contrib.auth.models import Group, User
 from rest_framework import serializers
 
-from .models import AuditEvent, Organization, OrganizationNode, Project
+from .models import AuditEvent, CloudAccount, Organization, OrganizationNode, Project
 from .rbac import MANAGED_ROLES
 
 
@@ -43,6 +45,66 @@ class ProjectSerializer(serializers.ModelSerializer):
         node = attrs.get("node") or getattr(self.instance, "node", None)
         if node and organization and node.organization_id != organization.id:
             raise serializers.ValidationError({"node": "Project node must belong to the same organization."})
+        return attrs
+
+
+class CloudAccountSerializer(serializers.ModelSerializer):
+    external_id = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    FORBIDDEN_CREDENTIAL_FIELDS = {
+        "access_key",
+        "secret_key",
+        "session_token",
+        "aws_access_key_id",
+        "aws_secret_access_key",
+        "aws_session_token",
+    }
+
+    class Meta:
+        model = CloudAccount
+        fields = [
+            "id",
+            "provider",
+            "organization",
+            "project",
+            "name",
+            "provider_account_id",
+            "role_arn",
+            "external_id",
+            "status",
+            "last_validated_at",
+            "last_error",
+            "metadata",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["status", "last_validated_at", "last_error", "metadata", "created_at", "updated_at"]
+
+    def to_internal_value(self, data):
+        forbidden = sorted(self.FORBIDDEN_CREDENTIAL_FIELDS.intersection(data.keys()))
+        if forbidden:
+            raise serializers.ValidationError(
+                {"credentials": "Long-lived AWS credentials are not accepted by finopser."}
+            )
+        return super().to_internal_value(data)
+
+    def validate_provider_account_id(self, value):
+        if not re.fullmatch(r"\d{12}", value):
+            raise serializers.ValidationError("AWS account ID must contain exactly 12 digits.")
+        return value
+
+    def validate_role_arn(self, value):
+        if not re.fullmatch(r"arn:(aws|aws-us-gov|aws-cn):iam::\d{12}:role/.+", value):
+            raise serializers.ValidationError("Enter a valid AWS IAM role ARN.")
+        return value
+
+    def validate(self, attrs):
+        provider = attrs.get("provider") or getattr(self.instance, "provider", CloudAccount.Provider.AWS)
+        if provider != CloudAccount.Provider.AWS:
+            raise serializers.ValidationError({"provider": "AWS is the only supported provider in Sprint 3."})
+        organization = attrs.get("organization") or getattr(self.instance, "organization", None)
+        project = attrs.get("project") if "project" in attrs else getattr(self.instance, "project", None)
+        if project and organization and project.organization_id != organization.id:
+            raise serializers.ValidationError({"project": "Project must belong to the same organization."})
         return attrs
 
 

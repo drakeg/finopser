@@ -1,8 +1,12 @@
+from unittest.mock import MagicMock, patch
+
 from django.contrib.auth.models import Group, User
 from django.test import SimpleTestCase, TestCase
 from rest_framework.test import APITestCase
 
-from .models import AuditEvent, Organization, OrganizationNode
+from .models import AuditEvent, CloudAccount, Organization, OrganizationNode, Project
+from .providers.aws import AWSProvider
+from .providers.base import ProviderValidationError, ValidationResult
 from .rbac import AUDITOR, CLOUD_ADMIN, PLATFORM_ADMIN
 
 
@@ -27,6 +31,60 @@ class ReadinessIntegrationTests(TestCase):
         response = self.client.get("/api/ready/")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["checks"], {"database": "ok", "redis": "ok"})
+
+
+class AWSProviderTests(SimpleTestCase):
+    @patch("core.providers.aws.boto3.client")
+    def test_assume_role_and_identity_validation(self, client_mock):
+        source_sts = MagicMock()
+        assumed_sts = MagicMock()
+        source_sts.assume_role.return_value = {
+            "Credentials": {
+                "AccessKeyId": "temporary-key",
+                "SecretAccessKey": "temporary-secret",
+                "SessionToken": "temporary-token",
+            }
+        }
+        assumed_sts.get_caller_identity.return_value = {
+            "Account": "123456789012",
+            "Arn": "arn:aws:sts::123456789012:assumed-role/Finopser/validation",
+            "UserId": "AROATEST:validation",
+        }
+        client_mock.side_effect = [source_sts, assumed_sts]
+
+        result = AWSProvider().validate_account(
+            account_id="123456789012",
+            role_arn="arn:aws:iam::123456789012:role/FinopserReadOnly",
+            external_id="test-external-id",
+        )
+
+        self.assertEqual(result.provider_account_id, "123456789012")
+        source_sts.assume_role.assert_called_once()
+        self.assertEqual(client_mock.call_count, 2)
+
+    @patch("core.providers.aws.boto3.client")
+    def test_identity_mismatch_is_rejected(self, client_mock):
+        source_sts = MagicMock()
+        assumed_sts = MagicMock()
+        source_sts.assume_role.return_value = {
+            "Credentials": {
+                "AccessKeyId": "temporary-key",
+                "SecretAccessKey": "temporary-secret",
+                "SessionToken": "temporary-token",
+            }
+        }
+        assumed_sts.get_caller_identity.return_value = {
+            "Account": "999999999999",
+            "Arn": "arn:aws:sts::999999999999:assumed-role/Finopser/validation",
+            "UserId": "AROATEST:validation",
+        }
+        client_mock.side_effect = [source_sts, assumed_sts]
+
+        with self.assertRaises(ProviderValidationError):
+            AWSProvider().validate_account(
+                account_id="123456789012",
+                role_arn="arn:aws:iam::123456789012:role/FinopserReadOnly",
+            )
 
 
 class GovernanceApiTests(APITestCase):
@@ -87,3 +145,70 @@ class GovernanceApiTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(CLOUD_ADMIN, response.data["roles"])
         self.assertTrue(AuditEvent.objects.filter(action="update_roles", object_id=str(target.id)).exists())
+
+    def _create_project(self, org_name="AWS Org"):
+        org = Organization.objects.create(name=org_name)
+        node = OrganizationNode.objects.create(organization=org, name="Cloud")
+        project = Project.objects.create(organization=org, node=node, name="AWS Project")
+        return org, project
+
+    def test_aws_account_registration_rejects_long_lived_keys(self):
+        org, project = self._create_project()
+        self.client.force_authenticate(self.admin)
+        payload = {
+            "provider": "aws",
+            "organization": org.id,
+            "project": project.id,
+            "name": "Production",
+            "provider_account_id": "123456789012",
+            "role_arn": "arn:aws:iam::123456789012:role/FinopserReadOnly",
+            "aws_access_key_id": "must-not-be-accepted",
+        }
+        response = self.client.post("/api/cloud-accounts/", payload, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(CloudAccount.objects.exists())
+
+    def test_cloud_account_project_must_match_organization(self):
+        org1, _ = self._create_project("Org One")
+        _, project2 = self._create_project("Org Two")
+        self.client.force_authenticate(self.admin)
+        response = self.client.post(
+            "/api/cloud-accounts/",
+            {
+                "provider": "aws",
+                "organization": org1.id,
+                "project": project2.id,
+                "name": "Invalid",
+                "provider_account_id": "123456789012",
+                "role_arn": "arn:aws:iam::123456789012:role/FinopserReadOnly",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    @patch("core.api.get_provider")
+    def test_cloud_account_validation_persists_safe_status_and_audit(self, provider_factory):
+        org, project = self._create_project()
+        account = CloudAccount.objects.create(
+            organization=org,
+            project=project,
+            name="Production",
+            provider_account_id="123456789012",
+            role_arn="arn:aws:iam::123456789012:role/FinopserReadOnly",
+            external_id="write-only-value",
+        )
+        provider = MagicMock()
+        provider.validate_account.return_value = ValidationResult(
+            provider_account_id="123456789012",
+            arn="arn:aws:sts::123456789012:assumed-role/Finopser/validation",
+            metadata={"user_id": "AROATEST:validation"},
+        )
+        provider_factory.return_value = provider
+        self.client.force_authenticate(self.admin)
+
+        response = self.client.post(f"/api/cloud-accounts/{account.id}/validate/", {}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["status"], CloudAccount.Status.VALID)
+        self.assertNotIn("external_id", response.data)
+        self.assertTrue(AuditEvent.objects.filter(action="validate_success").exists())
