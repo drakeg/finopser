@@ -28,9 +28,7 @@ class OrganizationNode(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        constraints = [
-            models.UniqueConstraint(fields=["organization", "parent", "name"], name="uniq_org_parent_node_name")
-        ]
+        constraints = [models.UniqueConstraint(fields=["organization", "parent", "name"], name="uniq_org_parent_node_name")]
 
     def __str__(self) -> str:
         return self.name
@@ -76,12 +74,7 @@ class CloudAccount(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        constraints = [
-            models.UniqueConstraint(
-                fields=["provider", "provider_account_id"],
-                name="uniq_provider_account_id",
-            )
-        ]
+        constraints = [models.UniqueConstraint(fields=["provider", "provider_account_id"], name="uniq_provider_account_id")]
 
     def __str__(self) -> str:
         return f"{self.name} ({self.provider_account_id})"
@@ -89,11 +82,7 @@ class CloudAccount(models.Model):
 
 class CloudResource(models.Model):
     provider = models.CharField(max_length=32)
-    cloud_account = models.ForeignKey(
-        CloudAccount,
-        on_delete=models.CASCADE,
-        related_name="resources",
-    )
+    cloud_account = models.ForeignKey(CloudAccount, on_delete=models.CASCADE, related_name="resources")
     provider_resource_id = models.CharField(max_length=1024)
     resource_type = models.CharField(max_length=128, db_index=True)
     name = models.CharField(max_length=512, blank=True)
@@ -107,12 +96,7 @@ class CloudResource(models.Model):
 
     class Meta:
         ordering = ["resource_type", "name", "provider_resource_id"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["provider", "cloud_account", "provider_resource_id"],
-                name="uniq_cloud_resource_identity",
-            )
-        ]
+        constraints = [models.UniqueConstraint(fields=["provider", "cloud_account", "provider_resource_id"], name="uniq_cloud_resource_identity")]
 
     def __str__(self) -> str:
         return self.name or self.provider_resource_id
@@ -125,11 +109,7 @@ class InventorySync(models.Model):
         PARTIAL = "partial", "Partial"
         FAILED = "failed", "Failed"
 
-    cloud_account = models.ForeignKey(
-        CloudAccount,
-        on_delete=models.CASCADE,
-        related_name="inventory_syncs",
-    )
+    cloud_account = models.ForeignKey(CloudAccount, on_delete=models.CASCADE, related_name="inventory_syncs")
     status = models.CharField(max_length=32, choices=Status.choices, default=Status.RUNNING)
     started_at = models.DateTimeField()
     completed_at = models.DateTimeField(null=True, blank=True)
@@ -144,6 +124,49 @@ class InventorySync(models.Model):
 
     def __str__(self) -> str:
         return f"{self.cloud_account} inventory {self.status}"
+
+
+class CostRecord(models.Model):
+    provider = models.CharField(max_length=32)
+    cloud_account = models.ForeignKey(CloudAccount, on_delete=models.CASCADE, related_name="cost_records")
+    project = models.ForeignKey(Project, on_delete=models.SET_NULL, null=True, blank=True, related_name="cost_records")
+    provider_account_id = models.CharField(max_length=64)
+    usage_date = models.DateField(db_index=True)
+    service = models.CharField(max_length=255, db_index=True)
+    region = models.CharField(max_length=64, blank=True, db_index=True)
+    amount = models.DecimalField(max_digits=20, decimal_places=8)
+    currency = models.CharField(max_length=16, default="USD")
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        ordering = ["usage_date", "service", "region"]
+        constraints = [models.UniqueConstraint(fields=["cloud_account", "usage_date", "service", "region", "currency"], name="uniq_cost_record_dimension")]
+
+    def __str__(self) -> str:
+        return f"{self.usage_date} {self.service} {self.amount} {self.currency}"
+
+
+class CostSync(models.Model):
+    class Status(models.TextChoices):
+        RUNNING = "running", "Running"
+        SUCCESS = "success", "Success"
+        PARTIAL = "partial", "Partial"
+        FAILED = "failed", "Failed"
+
+    cloud_account = models.ForeignKey(CloudAccount, on_delete=models.CASCADE, related_name="cost_syncs")
+    start_date = models.DateField()
+    end_date = models.DateField()
+    status = models.CharField(max_length=32, choices=Status.choices, default=Status.RUNNING)
+    started_at = models.DateTimeField()
+    completed_at = models.DateTimeField(null=True, blank=True)
+    record_count = models.PositiveIntegerField(default=0)
+    errors = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        ordering = ["-started_at"]
+
+    def __str__(self) -> str:
+        return f"{self.cloud_account} costs {self.status}"
 
 
 class AuditEvent(models.Model):
