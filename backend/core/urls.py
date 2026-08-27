@@ -12,6 +12,7 @@ from .api import (
     ProjectViewSet,
     UserRoleViewSet,
 )
+from .cost_api import CostRecordViewSet, CostSyncViewSet, sync_account_costs
 
 router = DefaultRouter()
 router.register("organizations", OrganizationViewSet)
@@ -20,6 +21,8 @@ router.register("projects", ProjectViewSet)
 router.register("cloud-accounts", CloudAccountViewSet)
 router.register("resources", CloudResourceViewSet, basename="resource")
 router.register("inventory-syncs", InventorySyncViewSet, basename="inventory-sync")
+router.register("costs", CostRecordViewSet, basename="cost")
+router.register("cost-syncs", CostSyncViewSet, basename="cost-sync")
 router.register("audit-events", AuditEventViewSet)
 router.register("users", UserRoleViewSet)
 
@@ -29,5 +32,6 @@ urlpatterns = [
     path("ready/", views.ready, name="ready"),
     path("auth/session/", views.session, name="session"),
     path("auth/me/", views.me, name="me"),
+    path("cloud-accounts/<int:pk>/sync-costs/", sync_account_costs, name="sync-account-costs"),
     path("", include(router.urls)),
 ]
