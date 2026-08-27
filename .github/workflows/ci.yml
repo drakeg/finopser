@@ -15,22 +15,16 @@ jobs:
           POSTGRES_DB: finopser
           POSTGRES_USER: finopser
           POSTGRES_PASSWORD: finopser
-        ports:
-          - 5432:5432
+        ports: [5432:5432]
         options: >-
           --health-cmd "pg_isready -U finopser -d finopser"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
+          --health-interval 3s --health-timeout 3s --health-retries 10
       redis:
         image: redis:8-alpine
-        ports:
-          - 6379:6379
+        ports: [6379:6379]
         options: >-
           --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
+          --health-interval 3s --health-timeout 3s --health-retries 10
     env:
       POSTGRES_HOST: 127.0.0.1
       POSTGRES_PORT: 5432
@@ -39,6 +33,7 @@ jobs:
       POSTGRES_PASSWORD: finopser
       DJANGO_SECRET_KEY: ci-secret-key-not-for-production
       CELERY_BROKER_URL: redis://127.0.0.1:6379/0
+      CELERY_RESULT_BACKEND: redis://127.0.0.1:6379/1
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -60,11 +55,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('frontend/package.json') }}
+          restore-keys: npm-${{ runner.os }}-
+      - run: npm install --prefer-offline --no-audit --no-fund
         working-directory: frontend
-      - run: npm run lint
-        working-directory: frontend
-      - run: npm run build
+      - run: npm run lint && npm run build
         working-directory: frontend
 
   docker:
@@ -73,8 +71,8 @@ jobs:
       - uses: actions/checkout@v4
       - run: cp .env.example .env
       - run: docker compose config
-      - run: docker compose up -d --build --wait
-      - run: curl --fail --retry 5 --retry-delay 2 http://127.0.0.1:8080/
-      - run: curl --fail --retry 5 --retry-delay 2 http://127.0.0.1:8000/api/ready/
+      - run: docker compose build backend frontend
+      - run: docker compose up -d --no-build --wait
+      - run: curl --fail --retry 3 --retry-delay 1 http://127.0.0.1:8080/ && curl --fail --retry 3 --retry-delay 1 http://127.0.0.1:8000/api/ready/
       - if: always()
         run: docker compose down -v

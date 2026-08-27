@@ -25,6 +25,7 @@ services:
       retries: 10
 
   backend:
+    image: finopser-backend:local
     build: ./backend
     env_file: .env
     environment:
@@ -47,7 +48,7 @@ services:
       retries: 10
 
   worker:
-    build: ./backend
+    image: finopser-backend:local
     env_file: .env
     environment:
       POSTGRES_HOST: postgres
@@ -60,7 +61,7 @@ services:
         condition: service_healthy
 
   scheduler:
-    build: ./backend
+    image: finopser-backend:local
     env_file: .env
     environment:
       POSTGRES_HOST: postgres
