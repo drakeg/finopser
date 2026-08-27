@@ -87,6 +87,65 @@ class CloudAccount(models.Model):
         return f"{self.name} ({self.provider_account_id})"
 
 
+class CloudResource(models.Model):
+    provider = models.CharField(max_length=32)
+    cloud_account = models.ForeignKey(
+        CloudAccount,
+        on_delete=models.CASCADE,
+        related_name="resources",
+    )
+    provider_resource_id = models.CharField(max_length=1024)
+    resource_type = models.CharField(max_length=128, db_index=True)
+    name = models.CharField(max_length=512, blank=True)
+    region = models.CharField(max_length=64, blank=True, db_index=True)
+    state = models.CharField(max_length=128, blank=True, db_index=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+    first_seen = models.DateTimeField(auto_now_add=True)
+    last_seen = models.DateTimeField()
+    metadata = models.JSONField(default=dict, blank=True)
+    tags = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["resource_type", "name", "provider_resource_id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["provider", "cloud_account", "provider_resource_id"],
+                name="uniq_cloud_resource_identity",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return self.name or self.provider_resource_id
+
+
+class InventorySync(models.Model):
+    class Status(models.TextChoices):
+        RUNNING = "running", "Running"
+        SUCCESS = "success", "Success"
+        PARTIAL = "partial", "Partial"
+        FAILED = "failed", "Failed"
+
+    cloud_account = models.ForeignKey(
+        CloudAccount,
+        on_delete=models.CASCADE,
+        related_name="inventory_syncs",
+    )
+    status = models.CharField(max_length=32, choices=Status.choices, default=Status.RUNNING)
+    started_at = models.DateTimeField()
+    completed_at = models.DateTimeField(null=True, blank=True)
+    discovered_count = models.PositiveIntegerField(default=0)
+    created_count = models.PositiveIntegerField(default=0)
+    updated_count = models.PositiveIntegerField(default=0)
+    stale_count = models.PositiveIntegerField(default=0)
+    errors = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        ordering = ["-started_at"]
+
+    def __str__(self) -> str:
+        return f"{self.cloud_account} inventory {self.status}"
+
+
 class AuditEvent(models.Model):
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     action = models.CharField(max_length=100)

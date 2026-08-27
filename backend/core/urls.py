@@ -5,6 +5,8 @@ from . import views
 from .api import (
     AuditEventViewSet,
     CloudAccountViewSet,
+    CloudResourceViewSet,
+    InventorySyncViewSet,
     OrganizationNodeViewSet,
     OrganizationViewSet,
     ProjectViewSet,
@@ -16,6 +18,8 @@ router.register("organizations", OrganizationViewSet)
 router.register("organization-nodes", OrganizationNodeViewSet)
 router.register("projects", ProjectViewSet)
 router.register("cloud-accounts", CloudAccountViewSet)
+router.register("resources", CloudResourceViewSet, basename="resource")
+router.register("inventory-syncs", InventorySyncViewSet, basename="inventory-sync")
 router.register("audit-events", AuditEventViewSet)
 router.register("users", UserRoleViewSet)
 
