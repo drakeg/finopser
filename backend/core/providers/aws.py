@@ -21,7 +21,7 @@ class AWSProvider:
             retries={"max_attempts": 2, "mode": "standard"},
         )
 
-    def _assumed_session(self, *, role_arn: str, external_id: str, session_name: str):
+    def _assume_credentials(self, *, role_arn: str, external_id: str, session_name: str):
         assume_args = {
             "RoleArn": role_arn,
             "RoleSessionName": session_name,
@@ -29,10 +29,15 @@ class AWSProvider:
         }
         if external_id:
             assume_args["ExternalId"] = external_id
-
         source_sts = boto3.client("sts", config=self.config)
-        assumed = source_sts.assume_role(**assume_args)
-        credentials = assumed["Credentials"]
+        return source_sts.assume_role(**assume_args)["Credentials"]
+
+    def _assumed_session(self, *, role_arn: str, external_id: str, session_name: str):
+        credentials = self._assume_credentials(
+            role_arn=role_arn,
+            external_id=external_id,
+            session_name=session_name,
+        )
         return boto3.Session(
             aws_access_key_id=credentials["AccessKeyId"],
             aws_secret_access_key=credentials["SecretAccessKey"],
@@ -47,12 +52,19 @@ class AWSProvider:
 
     def validate_account(self, *, account_id: str, role_arn: str, external_id: str = "") -> ValidationResult:
         try:
-            session = self._assumed_session(
+            credentials = self._assume_credentials(
                 role_arn=role_arn,
                 external_id=external_id,
                 session_name="finopser-validation",
             )
-            identity = session.client("sts", config=self.config).get_caller_identity()
+            assumed_sts = boto3.client(
+                "sts",
+                aws_access_key_id=credentials["AccessKeyId"],
+                aws_secret_access_key=credentials["SecretAccessKey"],
+                aws_session_token=credentials["SessionToken"],
+                config=self.config,
+            )
+            identity = assumed_sts.get_caller_identity()
         except ClientError as exc:
             raise ProviderValidationError(
                 f"AWS validation failed: {self._error_code(exc)}"

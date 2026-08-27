@@ -1,4 +1,5 @@
 from django.contrib.auth.models import User
+from django.db.models import Count
 from django.utils import timezone
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
@@ -178,6 +179,24 @@ class CloudResourceViewSet(
         if active in {"true", "false"}:
             queryset = queryset.filter(is_active=active == "true")
         return queryset
+
+    @action(detail=False, methods=["get"], url_path="summary")
+    def summary(self, request):
+        queryset = self.get_queryset()
+        active = queryset.filter(is_active=True)
+        by_type = list(
+            active.values("resource_type")
+            .annotate(count=Count("id"))
+            .order_by("-count", "resource_type")
+        )
+        return Response(
+            {
+                "total": queryset.count(),
+                "active": active.count(),
+                "inactive": queryset.filter(is_active=False).count(),
+                "by_type": by_type,
+            }
+        )
 
 
 class InventorySyncViewSet(
