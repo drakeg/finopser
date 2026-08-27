@@ -6,7 +6,13 @@ from rest_framework.response import Response
 from .audit import record_audit
 from .models import AuditEvent, Organization, OrganizationNode, Project
 from .rbac import GovernancePermission, PlatformAdminPermission
-from .serializers import AuditEventSerializer, OrganizationNodeSerializer, OrganizationSerializer, ProjectSerializer, UserRoleSerializer
+from .serializers import (
+    AuditEventSerializer,
+    OrganizationNodeSerializer,
+    OrganizationSerializer,
+    ProjectSerializer,
+    UserRoleSerializer,
+)
 
 
 class AuditedModelViewSet(viewsets.ModelViewSet):
@@ -31,12 +37,20 @@ class OrganizationViewSet(AuditedModelViewSet):
 
 
 class OrganizationNodeViewSet(AuditedModelViewSet):
-    queryset = OrganizationNode.objects.select_related("organization", "parent").all().order_by("organization__name", "name")
+    queryset = (
+        OrganizationNode.objects.select_related("organization", "parent")
+        .all()
+        .order_by("organization__name", "name")
+    )
     serializer_class = OrganizationNodeSerializer
 
 
 class ProjectViewSet(AuditedModelViewSet):
-    queryset = Project.objects.select_related("organization", "node").all().order_by("organization__name", "name")
+    queryset = (
+        Project.objects.select_related("organization", "node")
+        .all()
+        .order_by("organization__name", "name")
+    )
     serializer_class = ProjectSerializer
 
 
@@ -56,8 +70,16 @@ class UserRoleViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets
         user = self.get_object()
         roles = request.data.get("roles", [])
         if not isinstance(roles, list):
-            return Response({"roles": "Expected a list of role names."}, status=status.HTTP_400_BAD_REQUEST)
-        serializer = self.get_serializer(user, data={}, partial=True, context={"request": request, "requested_roles": roles})
+            return Response(
+                {"roles": "Expected a list of role names."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        serializer = self.get_serializer(
+            user,
+            data={},
+            partial=True,
+            context={"request": request, "requested_roles": roles},
+        )
         serializer.is_valid(raise_exception=True)
         serializer.save()
         record_audit(request.user, "update_roles", user, {"roles": roles})

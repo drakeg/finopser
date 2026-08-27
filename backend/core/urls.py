@@ -2,7 +2,13 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from . import views
-from .api import AuditEventViewSet, OrganizationNodeViewSet, OrganizationViewSet, ProjectViewSet, UserRoleViewSet
+from .api import (
+    AuditEventViewSet,
+    OrganizationNodeViewSet,
+    OrganizationViewSet,
+    ProjectViewSet,
+    UserRoleViewSet,
+)
 
 router = DefaultRouter()
 router.register("organizations", OrganizationViewSet)
