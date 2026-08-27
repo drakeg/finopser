@@ -1,4 +1,4 @@
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.utils import timezone
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import api_view, permission_classes
@@ -15,7 +15,6 @@ from .models import (
     ComplianceRun,
 )
 from .rbac import CLOUD_ADMIN, PLATFORM_ADMIN, SECURITY_ENGINEER, user_has_role
-
 
 class ComplianceWritePermission(BasePermission):
     def has_permission(self, request, view):
@@ -189,6 +188,10 @@ def summary(request):
     ensure_baseline_controls()
     now = timezone.now()
     active_findings = ComplianceFinding.objects.exclude(status=ComplianceFinding.Status.RESOLVED)
+    active_exceptions = ComplianceException.objects.filter(is_active=True).filter(
+        Q(expires_at__isnull=True) | Q(expires_at__gt=now)
+    )
+    latest_run = ComplianceRun.objects.first()
     return Response(
         {
             "frameworks": ComplianceFramework.objects.filter(enabled=True).count(),
@@ -203,11 +206,7 @@ def summary(request):
                     .order_by("severity")
                 ),
             },
-            "active_exceptions": ComplianceException.objects.filter(is_active=True)
-            .filter(expires_at__isnull=True | (expires_at__gt=now))
-            .count(),
-            "latest_run": RunSerializer(ComplianceRun.objects.first()).data
-            if ComplianceRun.objects.exists()
-            else None,
+            "active_exceptions": active_exceptions.count(),
+            "latest_run": RunSerializer(latest_run).data if latest_run else None,
         }
     )
