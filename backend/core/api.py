@@ -65,6 +65,15 @@ class CloudAccountViewSet(AuditedModelViewSet):
     )
     serializer_class = CloudAccountSerializer
 
+    def perform_update(self, serializer):
+        account = serializer.save(
+            status=CloudAccount.Status.UNVALIDATED,
+            last_validated_at=None,
+            last_error="",
+            metadata={},
+        )
+        record_audit(self.request.user, "update", account)
+
     @action(detail=True, methods=["post"], url_path="validate")
     def validate_connection(self, request, pk=None):
         account = self.get_object()

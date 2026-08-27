@@ -50,6 +50,14 @@ class ProjectSerializer(serializers.ModelSerializer):
 
 class CloudAccountSerializer(serializers.ModelSerializer):
     external_id = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    FORBIDDEN_CREDENTIAL_FIELDS = {
+        "access_key",
+        "secret_key",
+        "session_token",
+        "aws_access_key_id",
+        "aws_secret_access_key",
+        "aws_session_token",
+    }
 
     class Meta:
         model = CloudAccount
@@ -70,6 +78,14 @@ class CloudAccountSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["status", "last_validated_at", "last_error", "metadata", "created_at", "updated_at"]
+
+    def to_internal_value(self, data):
+        forbidden = sorted(self.FORBIDDEN_CREDENTIAL_FIELDS.intersection(data.keys()))
+        if forbidden:
+            raise serializers.ValidationError(
+                {"credentials": "Long-lived AWS credentials are not accepted by finopser."}
+            )
+        return super().to_internal_value(data)
 
     def validate_provider_account_id(self, value):
         if not re.fullmatch(r"\d{12}", value):
