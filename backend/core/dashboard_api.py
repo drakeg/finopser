@@ -6,7 +6,7 @@ from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
-from .entitlements import user_organization
+from .entitlements import organization_scope_id
 from .models import CloudAccount, CloudResource, CostRecord, CostSync, InventorySync
 from .rbac import GovernancePermission
 
@@ -179,9 +179,8 @@ def operational_dashboard(request):
     costs = CostRecord.objects.select_related("cloud_account", "project")
     inventory_syncs = InventorySync.objects.select_related("cloud_account")
     cost_syncs = CostSync.objects.select_related("cloud_account")
-    if not request.user.is_superuser:
-        organization = user_organization(request.user)
-        organization_id = organization.id if organization else -1
+    organization_id = organization_scope_id(request.user)
+    if organization_id is not None:
         accounts = accounts.filter(organization_id=organization_id)
         resources_queryset = resources_queryset.filter(
             cloud_account__organization_id=organization_id
@@ -248,9 +247,9 @@ def operational_dashboard(request):
     account_status = list(
         accounts.values("status").annotate(count=Count("id")).order_by("status")
     )
-    latest_inventory = (
-        inventory_syncs.order_by("cloud_account_id", "-started_at").distinct("cloud_account_id")
-    )
+    latest_inventory = inventory_syncs.order_by(
+        "cloud_account_id", "-started_at"
+    ).distinct("cloud_account_id")
     latest_cost = cost_syncs.order_by("cloud_account_id", "-started_at").distinct(
         "cloud_account_id"
     )
