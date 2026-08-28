@@ -1,9 +1,5 @@
 from django.conf import settings
-from django.contrib.auth import (
-    authenticate,
-    login as django_login,
-    logout as django_logout,
-)
+from django.contrib import auth
 from django.db import connection
 from django.views.decorators.csrf import ensure_csrf_cookie
 from redis import Redis
@@ -85,13 +81,13 @@ def login(request):
             {"detail": "Username and password are required."},
             status=status.HTTP_400_BAD_REQUEST,
         )
-    user = authenticate(request, username=username, password=password)
+    user = auth.authenticate(request, username=username, password=password)
     if user is None or not user.is_active:
         return Response(
             {"detail": "Invalid username or password."},
             status=status.HTTP_401_UNAUTHORIZED,
         )
-    django_login(request, user)
+    auth.login(request, user)
     roles = list(user.groups.filter(name__in=MANAGED_ROLES).values_list("name", flat=True))
     return Response(
         {
@@ -107,7 +103,7 @@ def login(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def logout(request):
-    django_logout(request)
+    auth.logout(request)
     return Response({"authenticated": False})
 
 
