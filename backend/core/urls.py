@@ -1,7 +1,14 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from . import budget_api, compliance_api, policy_api, recommendation_api, views
+from . import (
+    budget_api,
+    compliance_api,
+    policy_api,
+    recommendation_api,
+    remediation_api,
+    views,
+)
 from .api import (
     AuditEventViewSet,
     CloudAccountViewSet,
@@ -36,6 +43,7 @@ router.register("budgets", budget_api.BudgetViewSet, basename="budget")
 router.register("budget-alerts", budget_api.BudgetAlertViewSet, basename="budget-alert")
 router.register("recommendations", recommendation_api.RecommendationViewSet, basename="recommendation")
 router.register("recommendation-runs", recommendation_api.RecommendationRunViewSet, basename="recommendation-run")
+router.register("remediations", remediation_api.RemediationActionViewSet, basename="remediation")
 router.register("audit-events", AuditEventViewSet)
 router.register("users", UserRoleViewSet)
 
@@ -54,6 +62,8 @@ urlpatterns = [
     path("budgets/summary/", budget_api.summary, name="budget-summary"),
     path("recommendations/generate/", recommendation_api.generate, name="recommendation-generate"),
     path("recommendations/summary/", recommendation_api.summary, name="recommendation-summary"),
+    path("remediations/catalog/", remediation_api.action_catalog, name="remediation-catalog"),
+    path("remediations/summary/", remediation_api.summary, name="remediation-summary"),
     path("cloud-accounts/<int:pk>/sync-costs/", sync_account_costs, name="sync-account-costs"),
     path("", include(router.urls)),
 ]
