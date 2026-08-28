@@ -53,6 +53,7 @@ urlpatterns = [
     path("ready/", views.ready, name="ready"),
     path("auth/session/", views.session, name="session"),
     path("auth/login/", views.login, name="login"),
+    path("auth/register/", views.register, name="register"),
     path("auth/logout/", views.logout, name="logout"),
     path("auth/me/", views.me, name="me"),
     path("dashboard/", operational_dashboard, name="operational-dashboard"),
