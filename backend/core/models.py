@@ -259,6 +259,78 @@ class ComplianceRun(models.Model):
         return f"Compliance evaluation {self.started_at.isoformat()}"
 
 
+class GovernancePolicy(models.Model):
+    class Severity(models.TextChoices):
+        CRITICAL = "critical", "Critical"
+        HIGH = "high", "High"
+        MEDIUM = "medium", "Medium"
+        LOW = "low", "Low"
+
+    class Mode(models.TextChoices):
+        OBSERVE = "observe", "Observe"
+        RECOMMEND = "recommend", "Recommend"
+
+    code = models.CharField(max_length=100, unique=True)
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    severity = models.CharField(max_length=16, choices=Severity.choices)
+    mode = models.CharField(max_length=16, choices=Mode.choices, default=Mode.OBSERVE)
+    enabled = models.BooleanField(default=True, db_index=True)
+    resource_type = models.CharField(max_length=128, db_index=True)
+    rule_key = models.CharField(max_length=100)
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, null=True, blank=True, related_name="governance_policies")
+    node = models.ForeignKey(OrganizationNode, on_delete=models.CASCADE, null=True, blank=True, related_name="governance_policies")
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, null=True, blank=True, related_name="governance_policies")
+    cloud_account = models.ForeignKey(CloudAccount, on_delete=models.CASCADE, null=True, blank=True, related_name="governance_policies")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="created_governance_policies")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["code"]
+
+    def __str__(self) -> str:
+        return self.code
+
+
+class PolicyViolation(models.Model):
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        RESOLVED = "resolved", "Resolved"
+
+    policy = models.ForeignKey(GovernancePolicy, on_delete=models.CASCADE, related_name="violations")
+    resource = models.ForeignKey(CloudResource, on_delete=models.CASCADE, related_name="policy_violations")
+    cloud_account = models.ForeignKey(CloudAccount, on_delete=models.CASCADE, related_name="policy_violations")
+    severity = models.CharField(max_length=16, choices=GovernancePolicy.Severity.choices)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.OPEN, db_index=True)
+    evidence = models.JSONField(default=dict, blank=True)
+    first_seen = models.DateTimeField()
+    last_seen = models.DateTimeField()
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["status", "severity", "policy__code", "resource__name"]
+        constraints = [models.UniqueConstraint(fields=["policy", "resource"], name="uniq_policy_violation_resource")]
+
+    def __str__(self) -> str:
+        return f"{self.policy} {self.resource} {self.status}"
+
+
+class PolicyRun(models.Model):
+    started_at = models.DateTimeField()
+    completed_at = models.DateTimeField(null=True, blank=True)
+    passed_count = models.PositiveIntegerField(default=0)
+    violated_count = models.PositiveIntegerField(default=0)
+    unknown_count = models.PositiveIntegerField(default=0)
+    resolved_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["-started_at"]
+
+    def __str__(self) -> str:
+        return f"Policy evaluation {self.started_at.isoformat()}"
+
+
 class AuditEvent(models.Model):
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     action = models.CharField(max_length=100)

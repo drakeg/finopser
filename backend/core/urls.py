@@ -1,7 +1,7 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from . import views
+from . import compliance_api, policy_api, views
 from .api import (
     AuditEventViewSet,
     CloudAccountViewSet,
@@ -11,15 +11,6 @@ from .api import (
     OrganizationViewSet,
     ProjectViewSet,
     UserRoleViewSet,
-)
-from .compliance_api import (
-    ControlViewSet,
-    ExceptionViewSet,
-    FindingViewSet,
-    FrameworkViewSet,
-    RunViewSet,
-    evaluate,
-    summary,
 )
 from .cost_api import CostRecordViewSet, CostSyncViewSet, sync_account_costs
 from .dashboard_api import operational_dashboard
@@ -33,11 +24,38 @@ router.register("resources", CloudResourceViewSet, basename="resource")
 router.register("inventory-syncs", InventorySyncViewSet, basename="inventory-sync")
 router.register("costs", CostRecordViewSet, basename="cost")
 router.register("cost-syncs", CostSyncViewSet, basename="cost-sync")
-router.register("compliance/frameworks", FrameworkViewSet, basename="compliance-framework")
-router.register("compliance/controls", ControlViewSet, basename="compliance-control")
-router.register("compliance/findings", FindingViewSet, basename="compliance-finding")
-router.register("compliance/exceptions", ExceptionViewSet, basename="compliance-exception")
-router.register("compliance/runs", RunViewSet, basename="compliance-run")
+router.register(
+    "compliance/frameworks",
+    compliance_api.FrameworkViewSet,
+    basename="compliance-framework",
+)
+router.register(
+    "compliance/controls",
+    compliance_api.ControlViewSet,
+    basename="compliance-control",
+)
+router.register(
+    "compliance/findings",
+    compliance_api.FindingViewSet,
+    basename="compliance-finding",
+)
+router.register(
+    "compliance/exceptions",
+    compliance_api.ExceptionViewSet,
+    basename="compliance-exception",
+)
+router.register(
+    "compliance/runs",
+    compliance_api.RunViewSet,
+    basename="compliance-run",
+)
+router.register("policies", policy_api.PolicyViewSet, basename="policy")
+router.register(
+    "policy-violations",
+    policy_api.ViolationViewSet,
+    basename="policy-violation",
+)
+router.register("policy-runs", policy_api.PolicyRunViewSet, basename="policy-run")
 router.register("audit-events", AuditEventViewSet)
 router.register("users", UserRoleViewSet)
 
@@ -48,8 +66,10 @@ urlpatterns = [
     path("auth/session/", views.session, name="session"),
     path("auth/me/", views.me, name="me"),
     path("dashboard/", operational_dashboard, name="operational-dashboard"),
-    path("compliance/evaluate/", evaluate, name="compliance-evaluate"),
-    path("compliance/summary/", summary, name="compliance-summary"),
+    path("compliance/evaluate/", compliance_api.evaluate, name="compliance-evaluate"),
+    path("compliance/summary/", compliance_api.summary, name="compliance-summary"),
+    path("policies/evaluate/", policy_api.evaluate, name="policy-evaluate"),
+    path("policies/summary/", policy_api.summary, name="policy-summary"),
     path("cloud-accounts/<int:pk>/sync-costs/", sync_account_costs, name="sync-account-costs"),
     path("", include(router.urls)),
 ]
