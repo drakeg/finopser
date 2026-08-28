@@ -1,7 +1,7 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from . import compliance_api, policy_api, views
+from . import budget_api, compliance_api, policy_api, views
 from .api import (
     AuditEventViewSet,
     CloudAccountViewSet,
@@ -56,6 +56,8 @@ router.register(
     basename="policy-violation",
 )
 router.register("policy-runs", policy_api.PolicyRunViewSet, basename="policy-run")
+router.register("budgets", budget_api.BudgetViewSet, basename="budget")
+router.register("budget-alerts", budget_api.BudgetAlertViewSet, basename="budget-alert")
 router.register("audit-events", AuditEventViewSet)
 router.register("users", UserRoleViewSet)
 
@@ -70,6 +72,8 @@ urlpatterns = [
     path("compliance/summary/", compliance_api.summary, name="compliance-summary"),
     path("policies/evaluate/", policy_api.evaluate, name="policy-evaluate"),
     path("policies/summary/", policy_api.summary, name="policy-summary"),
+    path("budgets/evaluate/", budget_api.evaluate, name="budget-evaluate"),
+    path("budgets/summary/", budget_api.summary, name="budget-summary"),
     path("cloud-accounts/<int:pk>/sync-costs/", sync_account_costs, name="sync-account-costs"),
     path("", include(router.urls)),
 ]
