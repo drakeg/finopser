@@ -1,7 +1,5 @@
 from rest_framework.permissions import SAFE_METHODS, BasePermission
 
-from .entitlements import has_feature
-
 PLATFORM_ADMIN = "Platform Administrator"
 CLOUD_ADMIN = "Cloud Administrator"
 FINOPS_ANALYST = "FinOps Analyst"
@@ -18,6 +16,9 @@ def user_has_role(user, role_names) -> bool:
         return False
     if user.is_superuser:
         return True
+    memberships = getattr(user, "organization_memberships", None)
+    if memberships is not None and memberships.filter(role__in=["owner", "admin"]).exists():
+        return True
     return user.groups.filter(name__in=role_names).exists()
 
 
@@ -33,46 +34,3 @@ class GovernancePermission(BasePermission):
 class PlatformAdminPermission(BasePermission):
     def has_permission(self, request, view):
         return user_has_role(request.user, {PLATFORM_ADMIN})
-
-
-class FeatureEntitlementPermission(BasePermission):
-    message = "Your current subscription does not include this feature."
-
-    def has_permission(self, request, view):
-        if not request.user or not request.user.is_authenticated:
-            return False
-        if request.user.is_superuser:
-            return True
-        feature = getattr(view, "required_feature", None)
-        return bool(feature and has_feature(request.user, feature))
-
-
-class ComplianceEntitlementPermission(FeatureEntitlementPermission):
-    def has_permission(self, request, view):
-        view.required_feature = "compliance"
-        return super().has_permission(request, view)
-
-
-class PolicyEntitlementPermission(FeatureEntitlementPermission):
-    def has_permission(self, request, view):
-        view.required_feature = "policies"
-        return super().has_permission(request, view)
-
-
-class BudgetEntitlementPermission(FeatureEntitlementPermission):
-    def has_permission(self, request, view):
-        view.required_feature = "budgets"
-        return super().has_permission(request, view)
-
-
-class RecommendationEntitlementPermission(FeatureEntitlementPermission):
-    def has_permission(self, request, view):
-        view.required_feature = "recommendations"
-        return super().has_permission(request, view)
-
-
-class RemediationEntitlementPermission(FeatureEntitlementPermission):
-    def has_permission(self, request, view):
-        feature = "remediation_live" if request.method not in SAFE_METHODS else "remediation_simulation"
-        view.required_feature = feature
-        return super().has_permission(request, view)
