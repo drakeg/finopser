@@ -1,5 +1,4 @@
 from django.http import JsonResponse
-
 from .entitlements import has_feature
 
 
