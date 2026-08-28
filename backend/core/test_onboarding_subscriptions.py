@@ -1,8 +1,7 @@
 from django.contrib.auth.models import User
+from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
-
-from django.test import TestCase
 
 from .account_models import OnboardingProfile, OrganizationMembership, Subscription
 from .models import CloudAccount, CostSync, InventorySync, Organization, OrganizationNode, Project
@@ -48,7 +47,9 @@ class OnboardingAndSubscriptionTests(TestCase):
         self.assertEqual(membership.role, OrganizationMembership.Role.OWNER)
         self.assertEqual(subscription.plan, Subscription.Plan.FREE)
         self.assertEqual(subscription.status, Subscription.Status.FREE)
-        self.assertTrue(OrganizationNode.objects.filter(organization=organization, name="Root").exists())
+        self.assertTrue(
+            OrganizationNode.objects.filter(organization=organization, name="Root").exists()
+        )
         self.assertTrue(Project.objects.filter(organization=organization, name="Default").exists())
         self.assertEqual(profile.current_step, OnboardingProfile.Step.CLOUD_ACCOUNT)
 
@@ -76,14 +77,17 @@ class OnboardingAndSubscriptionTests(TestCase):
         account.last_validated_at = timezone.now()
         account.save(update_fields=["status", "last_validated_at", "updated_at"])
 
-        inventory = InventorySync.objects.create(
+        InventorySync.objects.create(
             cloud_account=account,
             status=InventorySync.Status.SUCCESS,
             started_at=timezone.now(),
             completed_at=timezone.now(),
         )
         response = self.client.get("/api/account/bootstrap/")
-        self.assertEqual(response.json()["onboarding"]["current_step"], OnboardingProfile.Step.SYNC)
+        self.assertEqual(
+            response.json()["onboarding"]["current_step"],
+            OnboardingProfile.Step.SYNC,
+        )
 
         CostSync.objects.create(
             cloud_account=account,
@@ -95,8 +99,10 @@ class OnboardingAndSubscriptionTests(TestCase):
         )
         response = self.client.get("/api/account/bootstrap/")
         self.assertFalse(response.json()["onboarding"]["required"])
-        self.assertEqual(response.json()["onboarding"]["current_step"], OnboardingProfile.Step.COMPLETE)
-        inventory.refresh_from_db()
+        self.assertEqual(
+            response.json()["onboarding"]["current_step"],
+            OnboardingProfile.Step.COMPLETE,
+        )
 
     def test_free_plan_is_denied_paid_api_families(self):
         self.create_organization()
@@ -144,5 +150,8 @@ class OnboardingAndSubscriptionTests(TestCase):
         response = self.client.get("/api/plans/")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual([plan["code"] for plan in response.json()["plans"]], ["free", "pro", "business"])
+        self.assertEqual(
+            [plan["code"] for plan in response.json()["plans"]],
+            ["free", "pro", "business"],
+        )
         self.assertFalse(response.json()["billing_provider_configured"])
