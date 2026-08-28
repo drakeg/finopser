@@ -7,7 +7,7 @@ from rest_framework.exceptions import APIException, PermissionDenied
 from rest_framework.response import Response
 
 from .audit import record_audit
-from .entitlements import entitlement_payload, user_organization
+from .entitlements import entitlement_payload, organization_scope_id, user_organization
 from .inventory import sync_inventory
 from .models import (
     AuditEvent,
@@ -36,17 +36,6 @@ class PaymentRequired(APIException):
     status_code = 402
     default_detail = "Your current subscription does not include this capacity."
     default_code = "payment_required"
-
-
-def _organization_id(request):
-    if request.user.is_superuser:
-        return None
-    organization = user_organization(request.user)
-    if organization:
-        return organization.id
-    if request.user.groups.filter(name__in=MANAGED_ROLES).exists():
-        return None
-    return -1
 
 
 class AuditedModelViewSet(viewsets.ModelViewSet):
@@ -84,7 +73,7 @@ class OrganizationViewSet(AuditedModelViewSet):
 
     def get_queryset(self):
         queryset = Organization.objects.all().order_by("name")
-        organization_id = _organization_id(self.request)
+        organization_id = organization_scope_id(self.request.user)
         return queryset if organization_id is None else queryset.filter(id=organization_id)
 
     def perform_create(self, serializer):
@@ -100,7 +89,7 @@ class OrganizationNodeViewSet(AuditedModelViewSet):
         queryset = OrganizationNode.objects.select_related("organization", "parent").order_by(
             "organization__name", "name"
         )
-        organization_id = _organization_id(self.request)
+        organization_id = organization_scope_id(self.request.user)
         return queryset if organization_id is None else queryset.filter(organization_id=organization_id)
 
 
@@ -111,7 +100,7 @@ class ProjectViewSet(AuditedModelViewSet):
         queryset = Project.objects.select_related("organization", "node").order_by(
             "organization__name", "name"
         )
-        organization_id = _organization_id(self.request)
+        organization_id = organization_scope_id(self.request.user)
         return queryset if organization_id is None else queryset.filter(organization_id=organization_id)
 
 
@@ -122,7 +111,7 @@ class CloudAccountViewSet(AuditedModelViewSet):
         queryset = CloudAccount.objects.select_related("organization", "project").order_by(
             "provider", "name"
         )
-        organization_id = _organization_id(self.request)
+        organization_id = organization_scope_id(self.request.user)
         return queryset if organization_id is None else queryset.filter(organization_id=organization_id)
 
     def perform_create(self, serializer):
@@ -229,7 +218,7 @@ class CloudResourceViewSet(
 
     def get_queryset(self):
         queryset = CloudResource.objects.select_related("cloud_account").all()
-        organization_id = _organization_id(self.request)
+        organization_id = organization_scope_id(self.request.user)
         if organization_id is not None:
             queryset = queryset.filter(cloud_account__organization_id=organization_id)
         filters = {
@@ -275,7 +264,7 @@ class InventorySyncViewSet(
 
     def get_queryset(self):
         queryset = InventorySync.objects.select_related("cloud_account").all()
-        organization_id = _organization_id(self.request)
+        organization_id = organization_scope_id(self.request.user)
         if organization_id is not None:
             queryset = queryset.filter(cloud_account__organization_id=organization_id)
         cloud_account = self.request.query_params.get("cloud_account")
@@ -290,11 +279,8 @@ class AuditEventViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewse
 
     def get_queryset(self):
         queryset = AuditEvent.objects.select_related("actor").all()
-        if self.request.user.is_superuser:
-            return queryset
-        if user_organization(self.request.user) is None and self.request.user.groups.filter(
-            name__in=MANAGED_ROLES
-        ).exists():
+        scope_id = organization_scope_id(self.request.user)
+        if scope_id is None:
             return queryset
         return queryset.filter(actor=self.request.user)
 
