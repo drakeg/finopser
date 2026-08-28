@@ -11,6 +11,7 @@ from rest_framework.response import Response
 
 from .audit import record_audit
 from .costs import sync_costs
+from .entitlements import organization_scope_id
 from .models import CloudAccount, CostRecord, CostSync
 from .rbac import GovernancePermission
 
@@ -22,8 +23,18 @@ class CostRecordSerializer(serializers.ModelSerializer):
     class Meta:
         model = CostRecord
         fields = [
-            "id", "provider", "cloud_account", "account_name", "project", "project_name",
-            "provider_account_id", "usage_date", "service", "region", "amount", "currency",
+            "id",
+            "provider",
+            "cloud_account",
+            "account_name",
+            "project",
+            "project_name",
+            "provider_account_id",
+            "usage_date",
+            "service",
+            "region",
+            "amount",
+            "currency",
         ]
         read_only_fields = fields
 
@@ -34,8 +45,16 @@ class CostSyncSerializer(serializers.ModelSerializer):
     class Meta:
         model = CostSync
         fields = [
-            "id", "cloud_account", "account_name", "start_date", "end_date", "status",
-            "started_at", "completed_at", "record_count", "errors",
+            "id",
+            "cloud_account",
+            "account_name",
+            "start_date",
+            "end_date",
+            "status",
+            "started_at",
+            "completed_at",
+            "record_count",
+            "errors",
         ]
         read_only_fields = fields
 
@@ -54,8 +73,12 @@ def _total(queryset):
 @api_view(["POST"])
 @permission_classes([GovernancePermission])
 def sync_account_costs(request, pk: int):
+    queryset = CloudAccount.objects.all()
+    organization_id = organization_scope_id(request.user)
+    if organization_id is not None:
+        queryset = queryset.filter(organization_id=organization_id)
     try:
-        account = CloudAccount.objects.get(pk=pk)
+        account = queryset.get(pk=pk)
     except CloudAccount.DoesNotExist:
         return Response({"error": "Cloud account not found."}, status=status.HTTP_404_NOT_FOUND)
     if account.status != CloudAccount.Status.VALID:
@@ -107,6 +130,9 @@ class CostRecordViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewse
 
     def get_queryset(self):
         queryset = CostRecord.objects.select_related("cloud_account", "project").all()
+        organization_id = organization_scope_id(self.request.user)
+        if organization_id is not None:
+            queryset = queryset.filter(cloud_account__organization_id=organization_id)
         exact_filters = {
             "cloud_account_id": self.request.query_params.get("cloud_account"),
             "service": self.request.query_params.get("service"),
@@ -130,15 +156,40 @@ class CostRecordViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewse
         queryset = self.get_queryset()
         today = timezone.localdate()
         month_start = today.replace(day=1)
-        return Response({
-            "total": _total(queryset),
-            "mtd": _total(queryset.filter(usage_date__gte=month_start, usage_date__lte=today)),
-            "by_service": list(queryset.values("service").annotate(total=Sum("amount")).order_by("-total", "service")),
-            "by_account": list(queryset.values("cloud_account", "cloud_account__name").annotate(total=Sum("amount")).order_by("-total")),
-            "by_region": list(queryset.values("region").annotate(total=Sum("amount")).order_by("-total", "region")),
-            "by_project": list(queryset.values("project", "project__name").annotate(total=Sum("amount")).order_by("-total")),
-            "monthly": list(queryset.annotate(month=TruncMonth("usage_date")).values("month").annotate(total=Sum("amount")).order_by("month")),
-        })
+        return Response(
+            {
+                "total": _total(queryset),
+                "mtd": _total(
+                    queryset.filter(usage_date__gte=month_start, usage_date__lte=today)
+                ),
+                "by_service": list(
+                    queryset.values("service")
+                    .annotate(total=Sum("amount"))
+                    .order_by("-total", "service")
+                ),
+                "by_account": list(
+                    queryset.values("cloud_account", "cloud_account__name")
+                    .annotate(total=Sum("amount"))
+                    .order_by("-total")
+                ),
+                "by_region": list(
+                    queryset.values("region")
+                    .annotate(total=Sum("amount"))
+                    .order_by("-total", "region")
+                ),
+                "by_project": list(
+                    queryset.values("project", "project__name")
+                    .annotate(total=Sum("amount"))
+                    .order_by("-total")
+                ),
+                "monthly": list(
+                    queryset.annotate(month=TruncMonth("usage_date"))
+                    .values("month")
+                    .annotate(total=Sum("amount"))
+                    .order_by("month")
+                ),
+            }
+        )
 
     @action(detail=False, methods=["get"], url_path="export")
     def export(self, request):
@@ -147,15 +198,17 @@ class CostRecordViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewse
         writer = csv.writer(response)
         writer.writerow(["date", "account", "project", "service", "region", "amount", "currency"])
         for record in self.get_queryset().iterator():
-            writer.writerow([
-                record.usage_date,
-                record.cloud_account.name,
-                record.project.name if record.project else "",
-                record.service,
-                record.region,
-                record.amount,
-                record.currency,
-            ])
+            writer.writerow(
+                [
+                    record.usage_date,
+                    record.cloud_account.name,
+                    record.project.name if record.project else "",
+                    record.service,
+                    record.region,
+                    record.amount,
+                    record.currency,
+                ]
+            )
         return response
 
 
@@ -165,5 +218,8 @@ class CostSyncViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets
 
     def get_queryset(self):
         queryset = CostSync.objects.select_related("cloud_account").all()
+        organization_id = organization_scope_id(self.request.user)
+        if organization_id is not None:
+            queryset = queryset.filter(cloud_account__organization_id=organization_id)
         account = self.request.query_params.get("cloud_account")
         return queryset.filter(cloud_account_id=account) if account else queryset

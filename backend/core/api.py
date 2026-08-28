@@ -3,9 +3,11 @@ from django.db.models import Count
 from django.utils import timezone
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import APIException, PermissionDenied
 from rest_framework.response import Response
 
 from .audit import record_audit
+from .entitlements import entitlement_payload, organization_scope_id, user_organization
 from .inventory import sync_inventory
 from .models import (
     AuditEvent,
@@ -30,14 +32,34 @@ from .serializers import (
 )
 
 
+class PaymentRequired(APIException):
+    status_code = 402
+    default_detail = "Your current subscription does not include this capacity."
+    default_code = "payment_required"
+
+
 class AuditedModelViewSet(viewsets.ModelViewSet):
     permission_classes = [GovernancePermission]
 
+    def _ensure_organization_scope(self, serializer):
+        if self.request.user.is_superuser:
+            return
+        organization = user_organization(self.request.user)
+        if organization is None:
+            return
+        target = serializer.validated_data.get("organization")
+        if target is None and serializer.instance is not None:
+            target = getattr(serializer.instance, "organization", None)
+        if target is not None and target.id != organization.id:
+            raise PermissionDenied("Object must belong to your organization.")
+
     def perform_create(self, serializer):
+        self._ensure_organization_scope(serializer)
         obj = serializer.save()
         record_audit(self.request.user, "create", obj)
 
     def perform_update(self, serializer):
+        self._ensure_organization_scope(serializer)
         obj = serializer.save()
         record_audit(self.request.user, "update", obj)
 
@@ -47,37 +69,67 @@ class AuditedModelViewSet(viewsets.ModelViewSet):
 
 
 class OrganizationViewSet(AuditedModelViewSet):
-    queryset = Organization.objects.all().order_by("name")
     serializer_class = OrganizationSerializer
+
+    def get_queryset(self):
+        queryset = Organization.objects.all().order_by("name")
+        organization_id = organization_scope_id(self.request.user)
+        return queryset if organization_id is None else queryset.filter(id=organization_id)
+
+    def perform_create(self, serializer):
+        if not self.request.user.is_superuser and user_organization(self.request.user) is not None:
+            raise PermissionDenied("Use your existing organization workspace.")
+        super().perform_create(serializer)
 
 
 class OrganizationNodeViewSet(AuditedModelViewSet):
-    queryset = (
-        OrganizationNode.objects.select_related("organization", "parent")
-        .all()
-        .order_by("organization__name", "name")
-    )
     serializer_class = OrganizationNodeSerializer
+
+    def get_queryset(self):
+        queryset = OrganizationNode.objects.select_related("organization", "parent").order_by(
+            "organization__name", "name"
+        )
+        organization_id = organization_scope_id(self.request.user)
+        return queryset if organization_id is None else queryset.filter(organization_id=organization_id)
 
 
 class ProjectViewSet(AuditedModelViewSet):
-    queryset = (
-        Project.objects.select_related("organization", "node")
-        .all()
-        .order_by("organization__name", "name")
-    )
     serializer_class = ProjectSerializer
+
+    def get_queryset(self):
+        queryset = Project.objects.select_related("organization", "node").order_by(
+            "organization__name", "name"
+        )
+        organization_id = organization_scope_id(self.request.user)
+        return queryset if organization_id is None else queryset.filter(organization_id=organization_id)
 
 
 class CloudAccountViewSet(AuditedModelViewSet):
-    queryset = (
-        CloudAccount.objects.select_related("organization", "project")
-        .all()
-        .order_by("provider", "name")
-    )
     serializer_class = CloudAccountSerializer
 
+    def get_queryset(self):
+        queryset = CloudAccount.objects.select_related("organization", "project").order_by(
+            "provider", "name"
+        )
+        organization_id = organization_scope_id(self.request.user)
+        return queryset if organization_id is None else queryset.filter(organization_id=organization_id)
+
+    def perform_create(self, serializer):
+        self._ensure_organization_scope(serializer)
+        organization = user_organization(self.request.user)
+        if organization is not None:
+            limits = entitlement_payload(organization)
+            if CloudAccount.objects.filter(organization=organization).count() >= limits[
+                "max_cloud_accounts"
+            ]:
+                raise PaymentRequired(
+                    f"Your current plan allows {limits['max_cloud_accounts']} cloud account(s)."
+                )
+        account = serializer.save()
+        record_audit(self.request.user, "create", account)
+
     def perform_update(self, serializer):
+        self._ensure_organization_scope(serializer)
         account = serializer.save(
             status=CloudAccount.Status.UNVALIDATED,
             last_validated_at=None,
@@ -166,6 +218,9 @@ class CloudResourceViewSet(
 
     def get_queryset(self):
         queryset = CloudResource.objects.select_related("cloud_account").all()
+        organization_id = organization_scope_id(self.request.user)
+        if organization_id is not None:
+            queryset = queryset.filter(cloud_account__organization_id=organization_id)
         filters = {
             "cloud_account_id": self.request.query_params.get("cloud_account"),
             "resource_type": self.request.query_params.get("resource_type"),
@@ -209,6 +264,9 @@ class InventorySyncViewSet(
 
     def get_queryset(self):
         queryset = InventorySync.objects.select_related("cloud_account").all()
+        organization_id = organization_scope_id(self.request.user)
+        if organization_id is not None:
+            queryset = queryset.filter(cloud_account__organization_id=organization_id)
         cloud_account = self.request.query_params.get("cloud_account")
         if cloud_account:
             queryset = queryset.filter(cloud_account_id=cloud_account)
@@ -216,9 +274,15 @@ class InventorySyncViewSet(
 
 
 class AuditEventViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
-    queryset = AuditEvent.objects.select_related("actor").all()
     serializer_class = AuditEventSerializer
     permission_classes = [GovernancePermission]
+
+    def get_queryset(self):
+        queryset = AuditEvent.objects.select_related("actor").all()
+        scope_id = organization_scope_id(self.request.user)
+        if scope_id is None:
+            return queryset
+        return queryset.filter(actor=self.request.user)
 
 
 class UserRoleViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):

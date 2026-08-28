@@ -16,6 +16,9 @@ def user_has_role(user, role_names) -> bool:
         return False
     if user.is_superuser:
         return True
+    memberships = getattr(user, "organization_memberships", None)
+    if memberships is not None and memberships.filter(role__in=["owner", "admin"]).exists():
+        return True
     return user.groups.filter(name__in=role_names).exists()
 
 
@@ -30,4 +33,8 @@ class GovernancePermission(BasePermission):
 
 class PlatformAdminPermission(BasePermission):
     def has_permission(self, request, view):
-        return user_has_role(request.user, {PLATFORM_ADMIN})
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        return request.user.groups.filter(name=PLATFORM_ADMIN).exists()

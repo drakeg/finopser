@@ -2,6 +2,7 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from . import (
+    account_api,
     budget_api,
     compliance_api,
     policy_api,
@@ -23,10 +24,10 @@ from .cost_api import CostRecordViewSet, CostSyncViewSet, sync_account_costs
 from .dashboard_api import operational_dashboard
 
 router = DefaultRouter()
-router.register("organizations", OrganizationViewSet)
-router.register("organization-nodes", OrganizationNodeViewSet)
-router.register("projects", ProjectViewSet)
-router.register("cloud-accounts", CloudAccountViewSet)
+router.register("organizations", OrganizationViewSet, basename="organization")
+router.register("organization-nodes", OrganizationNodeViewSet, basename="organization-node")
+router.register("projects", ProjectViewSet, basename="project")
+router.register("cloud-accounts", CloudAccountViewSet, basename="cloud-account")
 router.register("resources", CloudResourceViewSet, basename="resource")
 router.register("inventory-syncs", InventorySyncViewSet, basename="inventory-sync")
 router.register("costs", CostRecordViewSet, basename="cost")
@@ -44,8 +45,8 @@ router.register("budget-alerts", budget_api.BudgetAlertViewSet, basename="budget
 router.register("recommendations", recommendation_api.RecommendationViewSet, basename="recommendation")
 router.register("recommendation-runs", recommendation_api.RecommendationRunViewSet, basename="recommendation-run")
 router.register("remediations", remediation_api.RemediationActionViewSet, basename="remediation")
-router.register("audit-events", AuditEventViewSet)
-router.register("users", UserRoleViewSet)
+router.register("audit-events", AuditEventViewSet, basename="audit-event")
+router.register("users", UserRoleViewSet, basename="user-role")
 
 urlpatterns = [
     path("", views.root, name="api-root"),
@@ -56,6 +57,28 @@ urlpatterns = [
     path("auth/register/", views.register, name="register"),
     path("auth/logout/", views.logout, name="logout"),
     path("auth/me/", views.me, name="me"),
+    path("plans/", account_api.plan_catalog, name="plan-catalog"),
+    path("account/bootstrap/", account_api.bootstrap, name="account-bootstrap"),
+    path(
+        "onboarding/organization/",
+        account_api.create_organization,
+        name="onboarding-create-organization",
+    ),
+    path(
+        "onboarding/cloud-account/",
+        account_api.connect_cloud_account,
+        name="onboarding-connect-cloud-account",
+    ),
+    path(
+        "onboarding/cloud-account/<int:pk>/validate/",
+        account_api.validate_cloud_account,
+        name="onboarding-validate-cloud-account",
+    ),
+    path(
+        "onboarding/cloud-account/<int:pk>/sync/",
+        account_api.initial_sync,
+        name="onboarding-initial-sync",
+    ),
     path("dashboard/", operational_dashboard, name="operational-dashboard"),
     path("compliance/evaluate/", compliance_api.evaluate, name="compliance-evaluate"),
     path("compliance/summary/", compliance_api.summary, name="compliance-summary"),
