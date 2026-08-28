@@ -1,5 +1,6 @@
 from django.contrib import admin
 
+from .account_models import OnboardingProfile, OrganizationMembership, Subscription
 from .models import (
     AuditEvent,
     CloudAccount,
@@ -15,6 +16,27 @@ from .models import (
 class OrganizationAdmin(admin.ModelAdmin):
     list_display = ("name", "created_at", "updated_at")
     search_fields = ("name",)
+
+
+@admin.register(OrganizationMembership)
+class OrganizationMembershipAdmin(admin.ModelAdmin):
+    list_display = ("user", "organization", "role", "created_at")
+    list_filter = ("role", "organization")
+    search_fields = ("user__username", "user__email", "organization__name")
+
+
+@admin.register(Subscription)
+class SubscriptionAdmin(admin.ModelAdmin):
+    list_display = ("organization", "plan", "status", "billing_provider", "current_period_end")
+    list_filter = ("plan", "status", "billing_provider")
+    search_fields = ("organization__name", "provider_customer_id", "provider_subscription_id")
+
+
+@admin.register(OnboardingProfile)
+class OnboardingProfileAdmin(admin.ModelAdmin):
+    list_display = ("user", "organization", "current_step", "completed_at", "updated_at")
+    list_filter = ("current_step",)
+    search_fields = ("user__username", "user__email", "organization__name")
 
 
 @admin.register(OrganizationNode)
@@ -100,7 +122,15 @@ class AuditEventAdmin(admin.ModelAdmin):
     list_display = ("created_at", "actor", "action", "object_type", "object_repr")
     list_filter = ("action", "object_type")
     search_fields = ("actor__username", "object_repr")
-    readonly_fields = ("actor", "action", "object_type", "object_id", "object_repr", "metadata", "created_at")
+    readonly_fields = (
+        "actor",
+        "action",
+        "object_type",
+        "object_id",
+        "object_repr",
+        "metadata",
+        "created_at",
+    )
 
     def has_add_permission(self, request):
         return False
