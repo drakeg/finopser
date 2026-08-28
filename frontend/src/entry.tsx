@@ -12,7 +12,9 @@ type ApiError={detail?:string;error?:string;upgrade_required?:boolean}
 
 const originalFetch=window.fetch.bind(window)
 async function api<T>(url:string,options:RequestInit={}):Promise<T>{
- const response=await originalFetch(url,{credentials:'include',...options,headers:{'Content-Type':'application/json',...(options.headers??{})}})
+ const headers=new Headers(options.headers)
+ headers.set('Content-Type','application/json')
+ const response=await originalFetch(url,{credentials:'include',...options,headers})
  const data=await response.json().catch(()=>({})) as T&ApiError
  if(!response.ok)throw new Error(data.detail??data.error??`${response.status}`)
  return data
@@ -45,12 +47,35 @@ function Onboarding({initial}:{initial:Bootstrap}){
  return <div className="setup-shell"><header className="setup-topbar"><div><div className="brand dark">finopser</div><span>Guided setup</span></div><button className="ghost-button" onClick={()=>post('/api/auth/logout/').then(()=>window.location.reload())}>Sign out</button></header><main className="setup-main"><div className="setup-intro"><p className="eyebrow">WELCOME TO FINOPSER</p><h1>Finish setting up your cloud command center.</h1><p>We’ll create your organization, connect AWS using AssumeRole, validate access, and run the first inventory and cost sync. Finopser never asks you to store long-lived AWS access keys.</p></div><Progress step={step}/>{error&&<div className="banner danger">{error}</div>}<section className="setup-card"><div className="setup-card-copy">{step==='organization'&&<><p className="eyebrow">STEP 1</p><h2>Create your organization</h2><p>This becomes the ownership boundary for cloud accounts, projects, subscription entitlements, and eventually team members.</p></>}{step==='cloud_account'&&<><p className="eyebrow">STEP 2</p><h2>Connect your first AWS account</h2><p>Enter the AWS account ID and the IAM role Finopser should assume. External ID is optional but recommended where your trust policy uses one.</p></>}{step==='validate'&&<><p className="eyebrow">STEP 3</p><h2>Validate AWS access</h2><p>Finopser will call STS AssumeRole and GetCallerIdentity to confirm the role works before collecting anything.</p></>}{step==='sync'&&<><p className="eyebrow">STEP 4</p><h2>Run the initial sync</h2><p>This collects normalized resource inventory plus current-month Cost Explorer data. Partial provider failures are recorded rather than silently ignored.</p></>}</div><div className="setup-card-action">{step==='organization'&&<form onSubmit={e=>{e.preventDefault();run(()=>post('/api/onboarding/organization/',{name:organizationName}))}}><label>Organization name<input autoFocus value={organizationName} onChange={e=>setOrganizationName(e.target.value)} placeholder="Acme Cloud Operations" required/></label><button className="primary-button" disabled={busy}>{busy?'Creating…':'Create organization'}</button></form>}{step==='cloud_account'&&<form onSubmit={e=>{e.preventDefault();run(()=>post('/api/onboarding/cloud-account/',{name:accountName,provider_account_id:accountId,role_arn:roleArn,external_id:externalId}))}}><label>Account name<input value={accountName} onChange={e=>setAccountName(e.target.value)} required/></label><label>AWS account ID<input inputMode="numeric" pattern="[0-9]{12}" value={accountId} onChange={e=>setAccountId(e.target.value)} placeholder="123456789012" required/></label><label>Role ARN<input value={roleArn} onChange={e=>setRoleArn(e.target.value)} placeholder="arn:aws:iam::123456789012:role/FinopserReadRole" required/></label><label>External ID <small>optional</small><input value={externalId} onChange={e=>setExternalId(e.target.value)}/></label><button className="primary-button" disabled={busy}>{busy?'Connecting…':'Save AWS connection'}</button></form>}{step==='validate'&&account&&<div className="setup-confirm"><dl><div><dt>Account</dt><dd>{account.name}</dd></div><div><dt>AWS account ID</dt><dd>{account.provider_account_id}</dd></div><div><dt>Status</dt><dd>{account.status}</dd></div></dl>{account.last_error&&<div className="banner danger">{account.last_error}</div>}<button className="primary-button" disabled={busy} onClick={()=>run(()=>post(`/api/onboarding/cloud-account/${account.id}/validate/`))}>{busy?'Validating…':'Validate AWS access'}</button></div>}{step==='sync'&&account&&<div className="setup-confirm"><dl><div><dt>Account</dt><dd>{account.name}</dd></div><div><dt>Connection</dt><dd>Validated</dd></div><div><dt>Next</dt><dd>Inventory + current-month costs</dd></div></dl><button className="primary-button" disabled={busy} onClick={()=>run(()=>post(`/api/onboarding/cloud-account/${account.id}/sync/`))}>{busy?'Syncing…':'Run initial sync'}</button></div>}</div></section><PlanSummary subscription={boot.subscription}/></main></div>
 }
 
+function applyPlanNavigation(subscription:Subscription|null){
+ if(!subscription)return
+ const featureByLabel:Record<string,string>={Budgets:'budgets',Compliance:'compliance',Policies:'policies',Recommendations:'recommendations',Automation:'remediation_simulation'}
+ document.querySelectorAll<HTMLButtonElement>('aside nav button').forEach(button=>{
+  const label=button.childNodes[0]?.textContent?.trim()??''
+  const feature=featureByLabel[label]
+  if(!feature||subscription.features[feature])return
+  button.disabled=true
+  button.classList.add('plan-locked')
+  button.title=`Upgrade from ${subscription.plan} to unlock ${label}`
+  const marker=button.querySelector('span')
+  if(marker)marker.textContent='Upgrade'
+ })
+ const foot=document.querySelector<HTMLElement>('.side-foot')
+ if(foot&&!foot.querySelector('.plan-chip')){
+  const chip=document.createElement('div')
+  chip.className='plan-chip'
+  chip.textContent=`${subscription.plan.toUpperCase()} plan`
+  foot.prepend(chip)
+ }
+}
+
 async function start(){
  let session:Session
+ let bootstrap:Bootstrap|null=null
  try{session=await api<Session>('/api/auth/session/')}catch{await import('./main');return}
  if(session.authenticated){
   try{
-   const bootstrap=await api<Bootstrap>('/api/account/bootstrap/')
+   bootstrap=await api<Bootstrap>('/api/account/bootstrap/')
    if(bootstrap.onboarding.required){ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><Onboarding initial={bootstrap}/></React.StrictMode>);return}
   }catch{/* fall through to the normal console so existing admins remain usable */}
  }
@@ -62,6 +87,7 @@ async function start(){
   return response
  }
  await import('./main')
+ if(bootstrap)setTimeout(()=>applyPlanNavigation(bootstrap?.subscription??null),0)
 }
 
 start()
