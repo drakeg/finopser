@@ -2,12 +2,15 @@ from django.db.models import Count, Q
 from django.utils import timezone
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import api_view, permission_classes
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import SAFE_METHODS, BasePermission
 from rest_framework.response import Response
 
 from .audit import record_audit
 from .compliance import evaluate_compliance
+from .entitlements import organization_scope_id, user_organization
 from .models import (
+    AuditEvent,
     ComplianceControl,
     ComplianceException,
     ComplianceFinding,
@@ -15,6 +18,7 @@ from .models import (
     ComplianceRun,
 )
 from .rbac import CLOUD_ADMIN, PLATFORM_ADMIN, SECURITY_ENGINEER, user_has_role
+from .tenant_scope import validate_related_organization
 
 
 class ComplianceWritePermission(BasePermission):
@@ -27,6 +31,42 @@ class ComplianceWritePermission(BasePermission):
             request.user,
             {PLATFORM_ADMIN, CLOUD_ADMIN, SECURITY_ENGINEER},
         )
+
+
+def _organization_id(user):
+    return organization_scope_id(user)
+
+
+def _finding_queryset(user):
+    queryset = ComplianceFinding.objects.select_related("control", "resource", "cloud_account")
+    organization_id = _organization_id(user)
+    if organization_id is not None:
+        queryset = queryset.filter(cloud_account__organization_id=organization_id)
+    return queryset
+
+
+def _exception_queryset(user):
+    queryset = ComplianceException.objects.select_related("control", "cloud_account", "resource")
+    organization_id = _organization_id(user)
+    if organization_id is not None:
+        queryset = queryset.filter(
+            Q(cloud_account__organization_id=organization_id)
+            | Q(resource__cloud_account__organization_id=organization_id)
+        ).distinct()
+    return queryset
+
+
+def _run_queryset(user):
+    queryset = ComplianceRun.objects.all()
+    organization_id = _organization_id(user)
+    if organization_id is None:
+        return queryset
+    run_ids = AuditEvent.objects.filter(
+        action="compliance.evaluate",
+        metadata__organization_id=organization_id,
+        object_type="ComplianceRun",
+    ).values_list("object_id", flat=True)
+    return queryset.filter(id__in=run_ids)
 
 
 class FrameworkSerializer(serializers.ModelSerializer):
@@ -105,6 +145,13 @@ class ExceptionSerializer(serializers.ModelSerializer):
         account = attrs.get("cloud_account", getattr(self.instance, "cloud_account", None))
         if resource and account and resource.cloud_account_id != account.id:
             raise serializers.ValidationError("Resource must belong to the selected cloud account.")
+        request = self.context.get("request")
+        if request and not request.user.is_superuser and user_organization(request.user) is not None:
+            if resource is None and account is None:
+                raise serializers.ValidationError(
+                    "Workspace compliance exceptions must target a cloud account or resource."
+                )
+            validate_related_organization(request.user, account, resource)
         return attrs
 
 
@@ -140,11 +187,7 @@ class FindingViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = FindingSerializer
 
     def get_queryset(self):
-        queryset = ComplianceFinding.objects.select_related(
-            "control",
-            "resource",
-            "cloud_account",
-        )
+        queryset = _finding_queryset(self.request.user)
         for field in ("status", "severity", "cloud_account", "control"):
             value = self.request.query_params.get(field)
             if value:
@@ -155,7 +198,9 @@ class FindingViewSet(viewsets.ReadOnlyModelViewSet):
 class ExceptionViewSet(viewsets.ModelViewSet):
     permission_classes = [ComplianceWritePermission]
     serializer_class = ExceptionSerializer
-    queryset = ComplianceException.objects.select_related("control", "cloud_account", "resource")
+
+    def get_queryset(self):
+        return _exception_queryset(self.request.user)
 
     def perform_create(self, serializer):
         exception = serializer.save(created_by=self.request.user)
@@ -173,12 +218,16 @@ class ExceptionViewSet(viewsets.ModelViewSet):
 class RunViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [ComplianceWritePermission]
     serializer_class = RunSerializer
-    queryset = ComplianceRun.objects.all()
+
+    def get_queryset(self):
+        return _run_queryset(self.request.user)
 
 
 @api_view(["POST"])
 @permission_classes([ComplianceWritePermission])
 def evaluate(request):
+    if _organization_id(request.user) == -1:
+        raise PermissionDenied("Complete organization setup before evaluating compliance.")
     run = evaluate_compliance(request.user)
     return Response(RunSerializer(run).data, status=status.HTTP_200_OK)
 
@@ -187,19 +236,21 @@ def evaluate(request):
 @permission_classes([ComplianceWritePermission])
 def summary(request):
     now = timezone.now()
-    active_findings = ComplianceFinding.objects.exclude(status=ComplianceFinding.Status.RESOLVED)
-    active_exceptions = ComplianceException.objects.filter(is_active=True).filter(
+    findings = _finding_queryset(request.user)
+    exceptions = _exception_queryset(request.user)
+    active_findings = findings.exclude(status=ComplianceFinding.Status.RESOLVED)
+    active_exceptions = exceptions.filter(is_active=True).filter(
         Q(expires_at__isnull=True) | Q(expires_at__gt=now)
     )
-    latest_run = ComplianceRun.objects.first()
+    latest_run = _run_queryset(request.user).first()
     return Response(
         {
             "frameworks": ComplianceFramework.objects.filter(enabled=True).count(),
             "controls": ComplianceControl.objects.count(),
             "findings": {
-                "open": ComplianceFinding.objects.filter(status=ComplianceFinding.Status.OPEN).count(),
-                "excepted": ComplianceFinding.objects.filter(status=ComplianceFinding.Status.EXCEPTED).count(),
-                "resolved": ComplianceFinding.objects.filter(status=ComplianceFinding.Status.RESOLVED).count(),
+                "open": findings.filter(status=ComplianceFinding.Status.OPEN).count(),
+                "excepted": findings.filter(status=ComplianceFinding.Status.EXCEPTED).count(),
+                "resolved": findings.filter(status=ComplianceFinding.Status.RESOLVED).count(),
                 "by_severity": list(
                     active_findings.values("severity")
                     .annotate(count=Count("id"))

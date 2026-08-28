@@ -4,6 +4,7 @@ from django.contrib.auth.models import Group, User
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
+from .account_models import OrganizationMembership, Subscription
 from .models import (
     CloudAccount,
     CloudResource,
@@ -134,3 +135,104 @@ class ComplianceTests(APITestCase):
         self.client.force_authenticate(user=None)
         response = self.client.get("/api/compliance/summary/")
         self.assertIn(response.status_code, (401, 403))
+
+
+class ComplianceTenantIsolationTests(APITestCase):
+    def setUp(self):
+        self.admin_group, _ = Group.objects.get_or_create(name=PLATFORM_ADMIN)
+        self.user_a = User.objects.create_user(username="tenant-a", password="password123")
+        self.user_b = User.objects.create_user(username="tenant-b", password="password123")
+        self.admin_group.user_set.add(self.user_a, self.user_b)
+        self.org_a, self.account_a = self._workspace("Tenant A", "111111111111")
+        self.org_b, self.account_b = self._workspace("Tenant B", "222222222222")
+        OrganizationMembership.objects.create(
+            user=self.user_a,
+            organization=self.org_a,
+            role=OrganizationMembership.Role.OWNER,
+        )
+        OrganizationMembership.objects.create(
+            user=self.user_b,
+            organization=self.org_b,
+            role=OrganizationMembership.Role.OWNER,
+        )
+        Subscription.objects.create(
+            organization=self.org_a,
+            plan=Subscription.Plan.PRO,
+            status=Subscription.Status.ACTIVE,
+        )
+        Subscription.objects.create(
+            organization=self.org_b,
+            plan=Subscription.Plan.PRO,
+            status=Subscription.Status.ACTIVE,
+        )
+        self.resource_a = self._resource(self.account_a, "i-tenant-a")
+        self.resource_b = self._resource(self.account_b, "i-tenant-b")
+
+    def _workspace(self, name, account_id):
+        organization = Organization.objects.create(name=name)
+        node = OrganizationNode.objects.create(organization=organization, name="Root")
+        project = Project.objects.create(organization=organization, node=node, name="Default")
+        account = CloudAccount.objects.create(
+            organization=organization,
+            project=project,
+            name=name,
+            provider_account_id=account_id,
+            role_arn=f"arn:aws:iam::{account_id}:role/FinopserReadOnly",
+            status=CloudAccount.Status.VALID,
+        )
+        return organization, account
+
+    def _resource(self, account, name):
+        return CloudResource.objects.create(
+            provider="aws",
+            cloud_account=account,
+            provider_resource_id=f"ec2:{account.provider_account_id}:us-east-1:{name}",
+            resource_type="aws.ec2.instance",
+            name=name,
+            region="us-east-1",
+            state="running",
+            is_active=True,
+            last_seen=timezone.now(),
+            metadata={"public_ip_address": "203.0.113.10"},
+        )
+
+    def test_evaluation_findings_summary_and_runs_are_isolated(self):
+        self.client.login(username="tenant-b", password="password123")
+        response_b = self.client.post("/api/compliance/evaluate/")
+        self.assertEqual(response_b.status_code, 200)
+        self.client.logout()
+
+        self.client.login(username="tenant-a", password="password123")
+        response_a = self.client.post("/api/compliance/evaluate/")
+        self.assertEqual(response_a.status_code, 200)
+        self.assertEqual(response_a.data["failed_count"], 1)
+
+        findings = self.client.get("/api/compliance/findings/")
+        self.assertEqual(findings.status_code, 200)
+        self.assertEqual(len(findings.data), 1)
+        self.assertEqual(findings.data[0]["cloud_account"], self.account_a.id)
+
+        summary = self.client.get("/api/compliance/summary/")
+        self.assertEqual(summary.status_code, 200)
+        self.assertEqual(summary.data["findings"]["open"], 1)
+
+        runs = self.client.get("/api/compliance/runs/")
+        self.assertEqual(runs.status_code, 200)
+        self.assertEqual(len(runs.data), 1)
+        self.assertEqual(runs.data[0]["id"], response_a.data["id"])
+
+    def test_exception_cannot_reference_other_workspace(self):
+        self.client.login(username="tenant-a", password="password123")
+        self.client.post("/api/compliance/evaluate/")
+        control = ComplianceControl.objects.get(code="AWS-EC2-001")
+        response = self.client.post(
+            "/api/compliance/exceptions/",
+            {
+                "control": control.id,
+                "resource": self.resource_b.id,
+                "reason": "Cross tenant attempt",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(ComplianceException.objects.filter(resource=self.resource_b).exists())

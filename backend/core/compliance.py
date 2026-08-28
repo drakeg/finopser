@@ -2,6 +2,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from .audit import record_audit
+from .entitlements import organization_scope_id
 from .models import (
     CloudResource,
     ComplianceControl,
@@ -81,11 +82,17 @@ def _evaluate_control(control, resource):
     return "unknown", {"reason": "unsupported control"}
 
 
-def _exception_for(control, resource, now):
+def _exception_for(control, resource, now, organization_id=None):
+    queryset = ComplianceException.objects.filter(control=control, is_active=True).filter(
+        Q(expires_at__isnull=True) | Q(expires_at__gt=now)
+    )
+    if organization_id is not None:
+        queryset = queryset.filter(
+            Q(resource__cloud_account__organization_id=organization_id)
+            | Q(resource__isnull=True, cloud_account__organization_id=organization_id)
+        )
     return (
-        ComplianceException.objects.filter(control=control, is_active=True)
-        .filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
-        .filter(
+        queryset.filter(
             Q(resource=resource)
             | Q(resource__isnull=True, cloud_account=resource.cloud_account)
             | Q(resource__isnull=True, cloud_account__isnull=True)
@@ -99,12 +106,15 @@ def evaluate_compliance(actor=None):
     run = ComplianceRun.objects.create(started_at=now)
     controls = ensure_baseline_controls()
     passed = failed = unknown = resolved = 0
+    organization_id = organization_scope_id(actor) if actor is not None else None
 
     for control in controls:
         resources = CloudResource.objects.filter(
             is_active=True,
             resource_type=control.resource_type,
         ).select_related("cloud_account")
+        if organization_id is not None:
+            resources = resources.filter(cloud_account__organization_id=organization_id)
         for resource in resources:
             result, evidence = _evaluate_control(control, resource)
             evidence = {
@@ -131,8 +141,8 @@ def evaluate_compliance(actor=None):
                 continue
 
             failed += 1
-            exception = _exception_for(control, resource, now)
-            status = (
+            exception = _exception_for(control, resource, now, organization_id)
+            finding_status = (
                 ComplianceFinding.Status.EXCEPTED
                 if exception
                 else ComplianceFinding.Status.OPEN
@@ -140,7 +150,7 @@ def evaluate_compliance(actor=None):
             defaults = {
                 "cloud_account": resource.cloud_account,
                 "severity": control.severity,
-                "status": status,
+                "status": finding_status,
                 "evidence": evidence,
                 "last_seen": now,
                 "resolved_at": None,
@@ -173,6 +183,7 @@ def evaluate_compliance(actor=None):
                 "failed": failed,
                 "unknown": unknown,
                 "resolved": resolved,
+                "organization_id": organization_id,
             },
         )
     return run
