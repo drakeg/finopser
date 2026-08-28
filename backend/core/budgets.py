@@ -5,6 +5,7 @@ from django.db.models import Sum
 from django.utils import timezone
 
 from .audit import record_audit
+from .entitlements import organization_scope_id
 from .models import Budget, BudgetAlert, CostRecord
 
 ZERO = Decimal("0")
@@ -66,8 +67,13 @@ def budget_snapshot(budget, today=None):
 
 def evaluate_budgets(actor=None, today=None):
     today = today or timezone.localdate()
+    budgets = Budget.objects.filter(enabled=True).order_by("name", "id")
+    if actor is not None:
+        organization_id = organization_scope_id(actor)
+        if organization_id is not None:
+            budgets = budgets.filter(organization_id=organization_id)
     snapshots = []
-    for budget in Budget.objects.filter(enabled=True).order_by("name", "id"):
+    for budget in budgets:
         snapshot = budget_snapshot(budget, today)
         period = snapshot["period"]
         active_levels = set()
@@ -122,16 +128,14 @@ def evaluate_budgets(actor=None, today=None):
                 alert.save(update_fields=["status", "resolved_at", "last_seen"])
         snapshots.append((budget, snapshot))
 
-    if actor is not None:
-        audit_target = Budget.objects.order_by("id").first()
-        if audit_target:
-            record_audit(
-                actor,
-                "budget.evaluate",
-                audit_target,
-                {
-                    "budget_count": len(snapshots),
-                    "period": today.replace(day=1).isoformat(),
-                },
-            )
+    if actor is not None and snapshots:
+        record_audit(
+            actor,
+            "budget.evaluate",
+            snapshots[0][0],
+            {
+                "budget_count": len(snapshots),
+                "period": today.replace(day=1).isoformat(),
+            },
+        )
     return snapshots
