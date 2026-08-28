@@ -32,15 +32,16 @@ def budget_snapshot(budget, today=None):
     today = today or timezone.localdate()
     month_start = today.replace(day=1)
     costs = _scoped_costs(budget, month_start, today)
-    aggregate = costs.aggregate(total=Sum("amount"), rows=Sum(1))
-    actual = aggregate["total"] or ZERO
+    actual = costs.aggregate(total=Sum("amount"))["total"] or ZERO
     has_data = costs.exists()
     utilization = (actual / budget.amount * HUNDRED).quantize(Decimal("0.1"))
     remaining = max(budget.amount - actual, ZERO)
     forecast = None
     if has_data:
         days_in_month = calendar.monthrange(today.year, today.month)[1]
-        forecast = (actual / Decimal(today.day) * Decimal(days_in_month)).quantize(Decimal("0.01"))
+        forecast = (actual / Decimal(today.day) * Decimal(days_in_month)).quantize(
+            Decimal("0.01")
+        )
 
     if utilization >= HUNDRED:
         level = BudgetAlert.Level.EXCEEDED
@@ -76,14 +77,20 @@ def evaluate_budgets(actor=None, today=None):
             active_levels.update({BudgetAlert.Level.WARNING, BudgetAlert.Level.CRITICAL})
         elif snapshot["level"] == BudgetAlert.Level.EXCEEDED:
             active_levels.update(
-                {BudgetAlert.Level.WARNING, BudgetAlert.Level.CRITICAL, BudgetAlert.Level.EXCEEDED}
+                {
+                    BudgetAlert.Level.WARNING,
+                    BudgetAlert.Level.CRITICAL,
+                    BudgetAlert.Level.EXCEEDED,
+                }
             )
 
         for level in BudgetAlert.Level.values:
-            alert = BudgetAlert.objects.filter(budget=budget, period=period, level=level).first()
+            alert = BudgetAlert.objects.filter(
+                budget=budget, period=period, level=level
+            ).first()
             if level in active_levels:
                 if alert is None:
-                    alert = BudgetAlert.objects.create(
+                    BudgetAlert.objects.create(
                         budget=budget,
                         period=period,
                         level=level,
@@ -101,7 +108,11 @@ def evaluate_budgets(actor=None, today=None):
                     alert.resolved_at = None
                     alert.save(
                         update_fields=[
-                            "status", "actual_amount", "utilization", "last_seen", "resolved_at"
+                            "status",
+                            "actual_amount",
+                            "utilization",
+                            "last_seen",
+                            "resolved_at",
                         ]
                     )
             elif alert and alert.status == BudgetAlert.Status.OPEN:
@@ -112,10 +123,15 @@ def evaluate_budgets(actor=None, today=None):
         snapshots.append((budget, snapshot))
 
     if actor is not None:
-        record_audit(
-            actor,
-            "budget.evaluate",
-            Budget.objects.order_by("id").first() or actor,
-            {"budget_count": len(snapshots), "period": today.replace(day=1).isoformat()},
-        )
+        audit_target = Budget.objects.order_by("id").first()
+        if audit_target:
+            record_audit(
+                actor,
+                "budget.evaluate",
+                audit_target,
+                {
+                    "budget_count": len(snapshots),
+                    "period": today.replace(day=1).isoformat(),
+                },
+            )
     return snapshots
