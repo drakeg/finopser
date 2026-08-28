@@ -19,7 +19,7 @@ from .models import (
     Project,
 )
 from .providers import ProviderValidationError, get_provider
-from .rbac import GovernancePermission, MANAGED_ROLES, PlatformAdminPermission
+from .rbac import GovernancePermission, PlatformAdminPermission
 from .serializers import (
     AuditEventSerializer,
     CloudAccountSerializer,
