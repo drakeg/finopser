@@ -6,6 +6,7 @@ from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
+from .entitlements import user_organization
 from .models import CloudAccount, CloudResource, CostRecord, CostSync, InventorySync
 from .rbac import GovernancePermission
 
@@ -45,10 +46,10 @@ def _attention_item(*, severity, kind, title, detail, target, object_id=None):
     }
 
 
-def _build_attention(today, now, mtd, previous_comparable):
+def _build_attention(accounts, resources, now, mtd, previous_comparable):
     items = []
 
-    for account in CloudAccount.objects.all().order_by("name"):
+    for account in accounts.order_by("name"):
         if account.status == CloudAccount.Status.INVALID:
             items.append(
                 _attention_item(
@@ -131,7 +132,7 @@ def _build_attention(today, now, mtd, previous_comparable):
                 )
             )
 
-    inactive_count = CloudResource.objects.filter(is_active=False).count()
+    inactive_count = resources.filter(is_active=False).count()
     if inactive_count:
         items.append(
             _attention_item(
@@ -173,7 +174,22 @@ def operational_dashboard(request):
     month_start = today.replace(day=1)
     previous_start, previous_end = _previous_month_period(today)
 
+    accounts = CloudAccount.objects.all()
+    resources_queryset = CloudResource.objects.all()
     costs = CostRecord.objects.select_related("cloud_account", "project")
+    inventory_syncs = InventorySync.objects.select_related("cloud_account")
+    cost_syncs = CostSync.objects.select_related("cloud_account")
+    if not request.user.is_superuser:
+        organization = user_organization(request.user)
+        organization_id = organization.id if organization else -1
+        accounts = accounts.filter(organization_id=organization_id)
+        resources_queryset = resources_queryset.filter(
+            cloud_account__organization_id=organization_id
+        )
+        costs = costs.filter(cloud_account__organization_id=organization_id)
+        inventory_syncs = inventory_syncs.filter(cloud_account__organization_id=organization_id)
+        cost_syncs = cost_syncs.filter(cloud_account__organization_id=organization_id)
+
     mtd_costs = costs.filter(usage_date__gte=month_start, usage_date__lte=today)
     previous_costs = costs.filter(usage_date__gte=previous_start, usage_date__lt=previous_end)
     mtd = _decimal_total(mtd_costs)
@@ -184,11 +200,11 @@ def operational_dashboard(request):
             (mtd - previous_comparable) / previous_comparable * Decimal("100")
         ).quantize(Decimal("0.1"))
 
-    active_resources = CloudResource.objects.filter(is_active=True)
+    active_resources = resources_queryset.filter(is_active=True)
     resources = {
-        "total": CloudResource.objects.count(),
+        "total": resources_queryset.count(),
         "active": active_resources.count(),
-        "inactive": CloudResource.objects.filter(is_active=False).count(),
+        "inactive": resources_queryset.filter(is_active=False).count(),
         "by_type": list(
             active_resources.values("resource_type")
             .annotate(count=Count("id"))
@@ -230,19 +246,13 @@ def operational_dashboard(request):
     }
 
     account_status = list(
-        CloudAccount.objects.values("status")
-        .annotate(count=Count("id"))
-        .order_by("status")
+        accounts.values("status").annotate(count=Count("id")).order_by("status")
     )
     latest_inventory = (
-        InventorySync.objects.select_related("cloud_account")
-        .order_by("cloud_account_id", "-started_at")
-        .distinct("cloud_account_id")
+        inventory_syncs.order_by("cloud_account_id", "-started_at").distinct("cloud_account_id")
     )
-    latest_cost = (
-        CostSync.objects.select_related("cloud_account")
-        .order_by("cloud_account_id", "-started_at")
-        .distinct("cloud_account_id")
+    latest_cost = cost_syncs.order_by("cloud_account_id", "-started_at").distinct(
+        "cloud_account_id"
     )
 
     return Response(
@@ -259,7 +269,7 @@ def operational_dashboard(request):
             "resources": resources,
             "top_costs": top_costs,
             "accounts": {
-                "total": CloudAccount.objects.count(),
+                "total": accounts.count(),
                 "by_status": account_status,
             },
             "sync_health": {
@@ -285,7 +295,8 @@ def operational_dashboard(request):
                 ],
             },
             "attention": _build_attention(
-                today,
+                accounts,
+                resources_queryset,
                 now,
                 mtd,
                 previous_comparable,
