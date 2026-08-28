@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import './styles.css'
+import './setup.css'
 
 type Session={authenticated:boolean;username:string|null}
 type CloudAccount={id:number;name:string;provider:string;provider_account_id:string;status:string;last_error:string}
