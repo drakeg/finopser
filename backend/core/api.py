@@ -3,10 +3,11 @@ from django.db.models import Count
 from django.utils import timezone
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import APIException, PermissionDenied
 from rest_framework.response import Response
 
 from .audit import record_audit
-from .entitlements import user_organization
+from .entitlements import entitlement_payload, user_organization
 from .inventory import sync_inventory
 from .models import (
     AuditEvent,
@@ -18,7 +19,7 @@ from .models import (
     Project,
 )
 from .providers import ProviderValidationError, get_provider
-from .rbac import GovernancePermission, PlatformAdminPermission
+from .rbac import GovernancePermission, MANAGED_ROLES, PlatformAdminPermission
 from .serializers import (
     AuditEventSerializer,
     CloudAccountSerializer,
@@ -31,21 +32,45 @@ from .serializers import (
 )
 
 
+class PaymentRequired(APIException):
+    status_code = 402
+    default_detail = "Your current subscription does not include this capacity."
+    default_code = "payment_required"
+
+
 def _organization_id(request):
     if request.user.is_superuser:
         return None
     organization = user_organization(request.user)
-    return organization.id if organization else -1
+    if organization:
+        return organization.id
+    if request.user.groups.filter(name__in=MANAGED_ROLES).exists():
+        return None
+    return -1
 
 
 class AuditedModelViewSet(viewsets.ModelViewSet):
     permission_classes = [GovernancePermission]
 
+    def _ensure_organization_scope(self, serializer):
+        if self.request.user.is_superuser:
+            return
+        organization = user_organization(self.request.user)
+        if organization is None:
+            return
+        target = serializer.validated_data.get("organization")
+        if target is None and serializer.instance is not None:
+            target = getattr(serializer.instance, "organization", None)
+        if target is not None and target.id != organization.id:
+            raise PermissionDenied("Object must belong to your organization.")
+
     def perform_create(self, serializer):
+        self._ensure_organization_scope(serializer)
         obj = serializer.save()
         record_audit(self.request.user, "create", obj)
 
     def perform_update(self, serializer):
+        self._ensure_organization_scope(serializer)
         obj = serializer.save()
         record_audit(self.request.user, "update", obj)
 
@@ -61,6 +86,11 @@ class OrganizationViewSet(AuditedModelViewSet):
         queryset = Organization.objects.all().order_by("name")
         organization_id = _organization_id(self.request)
         return queryset if organization_id is None else queryset.filter(id=organization_id)
+
+    def perform_create(self, serializer):
+        if not self.request.user.is_superuser and user_organization(self.request.user) is not None:
+            raise PermissionDenied("Use your existing organization workspace.")
+        super().perform_create(serializer)
 
 
 class OrganizationNodeViewSet(AuditedModelViewSet):
@@ -95,7 +125,22 @@ class CloudAccountViewSet(AuditedModelViewSet):
         organization_id = _organization_id(self.request)
         return queryset if organization_id is None else queryset.filter(organization_id=organization_id)
 
+    def perform_create(self, serializer):
+        self._ensure_organization_scope(serializer)
+        organization = user_organization(self.request.user)
+        if organization is not None:
+            limits = entitlement_payload(organization)
+            if CloudAccount.objects.filter(organization=organization).count() >= limits[
+                "max_cloud_accounts"
+            ]:
+                raise PaymentRequired(
+                    f"Your current plan allows {limits['max_cloud_accounts']} cloud account(s)."
+                )
+        account = serializer.save()
+        record_audit(self.request.user, "create", account)
+
     def perform_update(self, serializer):
+        self._ensure_organization_scope(serializer)
         account = serializer.save(
             status=CloudAccount.Status.UNVALIDATED,
             last_validated_at=None,
@@ -246,6 +291,10 @@ class AuditEventViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewse
     def get_queryset(self):
         queryset = AuditEvent.objects.select_related("actor").all()
         if self.request.user.is_superuser:
+            return queryset
+        if user_organization(self.request.user) is None and self.request.user.groups.filter(
+            name__in=MANAGED_ROLES
+        ).exists():
             return queryset
         return queryset.filter(actor=self.request.user)
 
