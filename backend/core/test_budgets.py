@@ -7,7 +7,15 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from .budgets import budget_snapshot, evaluate_budgets
-from .models import Budget, BudgetAlert, CloudAccount, CostRecord, Organization, OrganizationNode, Project
+from .models import (
+    Budget,
+    BudgetAlert,
+    CloudAccount,
+    CostRecord,
+    Organization,
+    OrganizationNode,
+    Project,
+)
 from .rbac import AUDITOR, FINOPS_ANALYST
 
 
