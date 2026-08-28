@@ -1,8 +1,11 @@
 from django.conf import settings
+from django.contrib.auth import authenticate, login as django_login, logout as django_logout
 from django.db import connection
+from django.views.decorators.csrf import ensure_csrf_cookie
 from redis import Redis
+from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from .rbac import MANAGED_ROLES
@@ -19,6 +22,8 @@ def root(request):
                 "health": "/api/health/",
                 "ready": "/api/ready/",
                 "session": "/api/auth/session/",
+                "login": "/api/auth/login/",
+                "logout": "/api/auth/logout/",
                 "me": "/api/auth/me/",
                 "organizations": "/api/organizations/",
                 "organization_nodes": "/api/organization-nodes/",
@@ -53,10 +58,53 @@ def ready(request):
     return Response({"status": "ok" if is_ready else "degraded", "checks": checks}, status=200 if is_ready else 503)
 
 
+@ensure_csrf_cookie
 @api_view(["GET"])
+@permission_classes([AllowAny])
 def session(request):
     user = request.user
-    return Response({"authenticated": user.is_authenticated, "username": user.get_username() if user.is_authenticated else None})
+    return Response(
+        {
+            "authenticated": user.is_authenticated,
+            "username": user.get_username() if user.is_authenticated else None,
+        }
+    )
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def login(request):
+    username = str(request.data.get("username", "")).strip()
+    password = str(request.data.get("password", ""))
+    if not username or not password:
+        return Response(
+            {"detail": "Username and password are required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    user = authenticate(request, username=username, password=password)
+    if user is None or not user.is_active:
+        return Response(
+            {"detail": "Invalid username or password."},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+    django_login(request, user)
+    roles = list(user.groups.filter(name__in=MANAGED_ROLES).values_list("name", flat=True))
+    return Response(
+        {
+            "authenticated": True,
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "roles": roles,
+        }
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def logout(request):
+    django_logout(request)
+    return Response({"authenticated": False})
 
 
 @api_view(["GET"])
