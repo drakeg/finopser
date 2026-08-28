@@ -9,6 +9,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
+from .account_models import OnboardingProfile
 from .rbac import MANAGED_ROLES
 
 
@@ -27,6 +28,8 @@ def root(request):
                 "register": "/api/auth/register/",
                 "logout": "/api/auth/logout/",
                 "me": "/api/auth/me/",
+                "account_bootstrap": "/api/account/bootstrap/",
+                "plans": "/api/plans/",
                 "organizations": "/api/organizations/",
                 "organization_nodes": "/api/organization-nodes/",
                 "projects": "/api/projects/",
@@ -139,6 +142,7 @@ def register(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
     user = User.objects.create_user(username=username, email=email, password=password)
+    OnboardingProfile.objects.create(user=user)
     auth.login(request, user)
     return Response(
         {
@@ -147,6 +151,7 @@ def register(request):
             "username": user.username,
             "email": user.email,
             "roles": [],
+            "onboarding_required": True,
         },
         status=status.HTTP_201_CREATED,
     )
