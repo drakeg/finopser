@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.db import models
 
-from .models import CloudAccount, CloudResource
+from .models import CloudAccount, CloudResource, Organization
 from .recommendation_models import Recommendation
 
 
@@ -15,6 +15,13 @@ class RemediationAction(models.Model):
         STALE = "stale", "Stale"
         REJECTED = "rejected", "Rejected"
 
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="remediation_actions",
+    )
     recommendation = models.ForeignKey(
         Recommendation,
         on_delete=models.SET_NULL,
