@@ -89,6 +89,10 @@ def entitlement_payload(organization):
 
 
 def has_feature(user, feature: str) -> bool:
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
     organization = user_organization(user)
     if organization is None:
         return False
