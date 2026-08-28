@@ -1,7 +1,7 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from . import budget_api, compliance_api, policy_api, views
+from . import budget_api, compliance_api, policy_api, recommendation_api, views
 from .api import (
     AuditEventViewSet,
     CloudAccountViewSet,
@@ -24,40 +24,18 @@ router.register("resources", CloudResourceViewSet, basename="resource")
 router.register("inventory-syncs", InventorySyncViewSet, basename="inventory-sync")
 router.register("costs", CostRecordViewSet, basename="cost")
 router.register("cost-syncs", CostSyncViewSet, basename="cost-sync")
-router.register(
-    "compliance/frameworks",
-    compliance_api.FrameworkViewSet,
-    basename="compliance-framework",
-)
-router.register(
-    "compliance/controls",
-    compliance_api.ControlViewSet,
-    basename="compliance-control",
-)
-router.register(
-    "compliance/findings",
-    compliance_api.FindingViewSet,
-    basename="compliance-finding",
-)
-router.register(
-    "compliance/exceptions",
-    compliance_api.ExceptionViewSet,
-    basename="compliance-exception",
-)
-router.register(
-    "compliance/runs",
-    compliance_api.RunViewSet,
-    basename="compliance-run",
-)
+router.register("compliance/frameworks", compliance_api.FrameworkViewSet, basename="compliance-framework")
+router.register("compliance/controls", compliance_api.ControlViewSet, basename="compliance-control")
+router.register("compliance/findings", compliance_api.FindingViewSet, basename="compliance-finding")
+router.register("compliance/exceptions", compliance_api.ExceptionViewSet, basename="compliance-exception")
+router.register("compliance/runs", compliance_api.RunViewSet, basename="compliance-run")
 router.register("policies", policy_api.PolicyViewSet, basename="policy")
-router.register(
-    "policy-violations",
-    policy_api.ViolationViewSet,
-    basename="policy-violation",
-)
+router.register("policy-violations", policy_api.ViolationViewSet, basename="policy-violation")
 router.register("policy-runs", policy_api.PolicyRunViewSet, basename="policy-run")
 router.register("budgets", budget_api.BudgetViewSet, basename="budget")
 router.register("budget-alerts", budget_api.BudgetAlertViewSet, basename="budget-alert")
+router.register("recommendations", recommendation_api.RecommendationViewSet, basename="recommendation")
+router.register("recommendation-runs", recommendation_api.RecommendationRunViewSet, basename="recommendation-run")
 router.register("audit-events", AuditEventViewSet)
 router.register("users", UserRoleViewSet)
 
@@ -74,6 +52,8 @@ urlpatterns = [
     path("policies/summary/", policy_api.summary, name="policy-summary"),
     path("budgets/evaluate/", budget_api.evaluate, name="budget-evaluate"),
     path("budgets/summary/", budget_api.summary, name="budget-summary"),
+    path("recommendations/generate/", recommendation_api.generate, name="recommendation-generate"),
+    path("recommendations/summary/", recommendation_api.summary, name="recommendation-summary"),
     path("cloud-accounts/<int:pk>/sync-costs/", sync_account_costs, name="sync-account-costs"),
     path("", include(router.urls)),
 ]
