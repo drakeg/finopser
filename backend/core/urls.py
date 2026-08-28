@@ -24,10 +24,10 @@ from .cost_api import CostRecordViewSet, CostSyncViewSet, sync_account_costs
 from .dashboard_api import operational_dashboard
 
 router = DefaultRouter()
-router.register("organizations", OrganizationViewSet)
-router.register("organization-nodes", OrganizationNodeViewSet)
-router.register("projects", ProjectViewSet)
-router.register("cloud-accounts", CloudAccountViewSet)
+router.register("organizations", OrganizationViewSet, basename="organization")
+router.register("organization-nodes", OrganizationNodeViewSet, basename="organization-node")
+router.register("projects", ProjectViewSet, basename="project")
+router.register("cloud-accounts", CloudAccountViewSet, basename="cloud-account")
 router.register("resources", CloudResourceViewSet, basename="resource")
 router.register("inventory-syncs", InventorySyncViewSet, basename="inventory-sync")
 router.register("costs", CostRecordViewSet, basename="cost")
@@ -45,8 +45,8 @@ router.register("budget-alerts", budget_api.BudgetAlertViewSet, basename="budget
 router.register("recommendations", recommendation_api.RecommendationViewSet, basename="recommendation")
 router.register("recommendation-runs", recommendation_api.RecommendationRunViewSet, basename="recommendation-run")
 router.register("remediations", remediation_api.RemediationActionViewSet, basename="remediation")
-router.register("audit-events", AuditEventViewSet)
-router.register("users", UserRoleViewSet)
+router.register("audit-events", AuditEventViewSet, basename="audit-event")
+router.register("users", UserRoleViewSet, basename="user-role")
 
 urlpatterns = [
     path("", views.root, name="api-root"),
