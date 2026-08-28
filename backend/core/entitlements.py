@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from .account_models import OrganizationMembership, Subscription
+from .account_models import OnboardingProfile, OrganizationMembership, Subscription
 
 
 @dataclass(frozen=True)
@@ -59,6 +59,20 @@ def user_organization(user):
         .first()
     )
     return membership.organization if membership else None
+
+
+def organization_scope_id(user):
+    """Return an org id for self-service users, -1 before setup, or None for legacy/global users."""
+    if not user or not user.is_authenticated:
+        return -1
+    if user.is_superuser:
+        return None
+    organization = user_organization(user)
+    if organization is not None:
+        return organization.id
+    if OnboardingProfile.objects.filter(user=user).exists():
+        return -1
+    return None
 
 
 def organization_subscription(organization):
