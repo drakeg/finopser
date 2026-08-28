@@ -64,6 +64,21 @@ urlpatterns = [
         account_api.create_organization,
         name="onboarding-create-organization",
     ),
+    path(
+        "onboarding/cloud-account/",
+        account_api.connect_cloud_account,
+        name="onboarding-connect-cloud-account",
+    ),
+    path(
+        "onboarding/cloud-account/<int:pk>/validate/",
+        account_api.validate_cloud_account,
+        name="onboarding-validate-cloud-account",
+    ),
+    path(
+        "onboarding/cloud-account/<int:pk>/sync/",
+        account_api.initial_sync,
+        name="onboarding-initial-sync",
+    ),
     path("dashboard/", operational_dashboard, name="operational-dashboard"),
     path("compliance/evaluate/", compliance_api.evaluate, name="compliance-evaluate"),
     path("compliance/summary/", compliance_api.summary, name="compliance-summary"),
