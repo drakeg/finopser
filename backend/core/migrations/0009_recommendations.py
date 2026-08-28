@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-        ("core", "0008_budget_budgetalert"),
+        ("core", "0008_budget_governance"),
     ]
 
     operations = [
