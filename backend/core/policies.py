@@ -1,6 +1,7 @@
 from django.utils import timezone
 
 from .audit import record_audit
+from .entitlements import organization_scope_id
 from .models import CloudResource, GovernancePolicy, PolicyRun, PolicyViolation
 
 BUILTIN_POLICIES = [
@@ -32,6 +33,7 @@ BUILTIN_POLICIES = [
         "rule_key": "rds_storage_encryption",
     },
 ]
+BUILTIN_POLICY_CODES = {definition["code"] for definition in BUILTIN_POLICIES}
 
 
 def ensure_builtin_policies():
@@ -65,12 +67,17 @@ def _evaluate_rule(policy, resource):
     return "unknown", {"reason": "unsupported policy rule"}
 
 
-def _resources_for_policy(policy):
-    queryset = CloudResource.objects.filter(is_active=True, resource_type=policy.resource_type).select_related(
+def _resources_for_policy(policy, organization_id=None):
+    queryset = CloudResource.objects.filter(
+        is_active=True,
+        resource_type=policy.resource_type,
+    ).select_related(
         "cloud_account",
         "cloud_account__project",
         "cloud_account__project__node",
     )
+    if organization_id is not None:
+        queryset = queryset.filter(cloud_account__organization_id=organization_id)
     if policy.organization_id:
         queryset = queryset.filter(cloud_account__organization_id=policy.organization_id)
     if policy.node_id:
@@ -87,9 +94,18 @@ def evaluate_policies(actor=None):
     run = PolicyRun.objects.create(started_at=now)
     ensure_builtin_policies()
     passed = violated = unknown = resolved = 0
+    organization_id = organization_scope_id(actor) if actor is not None else None
 
-    for policy in GovernancePolicy.objects.filter(enabled=True).order_by("code"):
-        for resource in _resources_for_policy(policy):
+    policies = GovernancePolicy.objects.filter(enabled=True).order_by("code")
+    if organization_id is not None:
+        policies = policies.filter(organization_id=organization_id) | policies.filter(
+            code__in=BUILTIN_POLICY_CODES,
+            organization__isnull=True,
+        )
+        policies = policies.distinct().order_by("code")
+
+    for policy in policies:
+        for resource in _resources_for_policy(policy, organization_id):
             result, evidence = _evaluate_rule(policy, resource)
             evidence = {
                 **evidence,
@@ -145,6 +161,12 @@ def evaluate_policies(actor=None):
             actor,
             "policy.evaluate",
             run,
-            {"passed": passed, "violated": violated, "unknown": unknown, "resolved": resolved},
+            {
+                "passed": passed,
+                "violated": violated,
+                "unknown": unknown,
+                "resolved": resolved,
+                "organization_id": organization_id,
+            },
         )
     return run
