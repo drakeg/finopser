@@ -2,6 +2,7 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from . import (
+    account_api,
     budget_api,
     compliance_api,
     policy_api,
@@ -56,6 +57,13 @@ urlpatterns = [
     path("auth/register/", views.register, name="register"),
     path("auth/logout/", views.logout, name="logout"),
     path("auth/me/", views.me, name="me"),
+    path("plans/", account_api.plan_catalog, name="plan-catalog"),
+    path("account/bootstrap/", account_api.bootstrap, name="account-bootstrap"),
+    path(
+        "onboarding/organization/",
+        account_api.create_organization,
+        name="onboarding-create-organization",
+    ),
     path("dashboard/", operational_dashboard, name="operational-dashboard"),
     path("compliance/evaluate/", compliance_api.evaluate, name="compliance-evaluate"),
     path("compliance/summary/", compliance_api.summary, name="compliance-summary"),
