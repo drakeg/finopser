@@ -18,14 +18,7 @@ class Recommendation(models.Model):
         DISMISSED = "dismissed", "Dismissed"
         RESOLVED = "resolved", "Resolved"
 
-    organization = models.ForeignKey(
-        "core.Organization",
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name="recommendations",
-    )
-    source_key = models.CharField(max_length=255)
+    source_key = models.CharField(max_length=255, unique=True)
     source_type = models.CharField(max_length=64, db_index=True)
     category = models.CharField(max_length=32, choices=Category.choices, db_index=True)
     priority = models.CharField(max_length=16, choices=Priority.choices, db_index=True)
@@ -71,25 +64,12 @@ class Recommendation(models.Model):
     class Meta:
         app_label = "core"
         ordering = ["status", "priority", "title"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["organization", "source_key"],
-                name="uniq_recommendation_org_source_key",
-            )
-        ]
 
     def __str__(self) -> str:
         return self.title
 
 
 class RecommendationRun(models.Model):
-    organization = models.ForeignKey(
-        "core.Organization",
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name="recommendation_runs",
-    )
     started_at = models.DateTimeField()
     completed_at = models.DateTimeField(null=True, blank=True)
     generated_count = models.PositiveIntegerField(default=0)
