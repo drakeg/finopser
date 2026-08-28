@@ -1,4 +1,4 @@
-from django.db.models import Case, DecimalField, Sum, Value, When
+from django.db.models import Case, Count, DecimalField, Sum, Value, When
 from django.utils import timezone
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
@@ -89,7 +89,14 @@ class RecommendationViewSet(viewsets.ReadOnlyModelViewSet):
         queryset = Recommendation.objects.select_related(
             "cloud_account", "project", "resource"
         ).annotate(priority_rank=priority_order)
-        for field in ("status", "category", "priority", "source_type", "cloud_account", "project"):
+        for field in (
+            "status",
+            "category",
+            "priority",
+            "source_type",
+            "cloud_account",
+            "project",
+        ):
             value = self.request.query_params.get(field)
             if value:
                 queryset = queryset.filter(**{field: value})
@@ -150,14 +157,22 @@ def summary(request):
     return Response(
         {
             "open": open_items.count(),
-            "dismissed": Recommendation.objects.filter(status=Recommendation.Status.DISMISSED).count(),
-            "resolved": Recommendation.objects.filter(status=Recommendation.Status.RESOLVED).count(),
+            "dismissed": Recommendation.objects.filter(
+                status=Recommendation.Status.DISMISSED
+            ).count(),
+            "resolved": Recommendation.objects.filter(
+                status=Recommendation.Status.RESOLVED
+            ).count(),
             "estimated_monthly_savings": savings,
             "by_category": list(
-                open_items.values("category").order_by("category").annotate(count=Sum(Value(1)))
+                open_items.values("category")
+                .annotate(count=Count("id"))
+                .order_by("category")
             ),
             "by_priority": list(
-                open_items.values("priority").order_by("priority").annotate(count=Sum(Value(1)))
+                open_items.values("priority")
+                .annotate(count=Count("id"))
+                .order_by("priority")
             ),
             "latest_run": RecommendationRunSerializer(latest).data if latest else None,
         }
