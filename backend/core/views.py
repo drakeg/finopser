@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.contrib import auth
+from django.contrib.auth import get_user_model
 from django.db import connection
 from django.views.decorators.csrf import ensure_csrf_cookie
 from redis import Redis
@@ -23,6 +24,7 @@ def root(request):
                 "ready": "/api/ready/",
                 "session": "/api/auth/session/",
                 "login": "/api/auth/login/",
+                "register": "/api/auth/register/",
                 "logout": "/api/auth/logout/",
                 "me": "/api/auth/me/",
                 "organizations": "/api/organizations/",
@@ -55,7 +57,10 @@ def ready(request):
     except Exception:
         pass
     is_ready = all(value == "ok" for value in checks.values())
-    return Response({"status": "ok" if is_ready else "degraded", "checks": checks}, status=200 if is_ready else 503)
+    return Response(
+        {"status": "ok" if is_ready else "degraded", "checks": checks},
+        status=200 if is_ready else 503,
+    )
 
 
 @ensure_csrf_cookie
@@ -101,6 +106,53 @@ def login(request):
 
 
 @api_view(["POST"])
+@permission_classes([AllowAny])
+def register(request):
+    username = str(request.data.get("username", "")).strip()
+    email = str(request.data.get("email", "")).strip()
+    password = str(request.data.get("password", ""))
+    password_confirm = str(request.data.get("password_confirm", ""))
+    if not username or not email or not password:
+        return Response(
+            {"detail": "Username, email, and password are required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if password != password_confirm:
+        return Response(
+            {"detail": "Passwords do not match."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if len(password) < 10:
+        return Response(
+            {"detail": "Password must be at least 10 characters."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    User = get_user_model()
+    if User.objects.filter(username__iexact=username).exists():
+        return Response(
+            {"detail": "That username is already in use."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if User.objects.filter(email__iexact=email).exists():
+        return Response(
+            {"detail": "That email address is already in use."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    user = User.objects.create_user(username=username, email=email, password=password)
+    auth.login(request, user)
+    return Response(
+        {
+            "authenticated": True,
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "roles": [],
+        },
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def logout(request):
     auth.logout(request)
@@ -111,4 +163,11 @@ def logout(request):
 @permission_classes([IsAuthenticated])
 def me(request):
     roles = list(request.user.groups.filter(name__in=MANAGED_ROLES).values_list("name", flat=True))
-    return Response({"id": request.user.id, "username": request.user.username, "email": request.user.email, "roles": roles})
+    return Response(
+        {
+            "id": request.user.id,
+            "username": request.user.username,
+            "email": request.user.email,
+            "roles": roles,
+        }
+    )
