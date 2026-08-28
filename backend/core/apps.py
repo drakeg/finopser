@@ -6,4 +6,4 @@ class CoreConfig(AppConfig):
     name = "core"
 
     def ready(self):
-        from . import recommendation_models  # noqa: F401
+        from . import automation_models, recommendation_models  # noqa: F401
