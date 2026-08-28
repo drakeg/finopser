@@ -4,7 +4,15 @@ from django.contrib.auth.models import Group, User
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
-from .models import CloudAccount, CloudResource, GovernancePolicy, Organization, OrganizationNode, PolicyViolation, Project
+from .models import (
+    CloudAccount,
+    CloudResource,
+    GovernancePolicy,
+    Organization,
+    OrganizationNode,
+    PolicyViolation,
+    Project,
+)
 from .policies import evaluate_policies
 from .rbac import AUDITOR, SECURITY_ENGINEER
 
@@ -57,9 +65,16 @@ class PolicyGuardrailTests(APITestCase):
         self.assertEqual(PolicyViolation.objects.count(), 0)
 
     def test_passing_evidence_resolves_prior_violation(self):
-        resource = self.resource("db", "aws.rds.db_instance", {"publicly_accessible": True, "storage_encrypted": True})
+        resource = self.resource(
+            "db",
+            "aws.rds.db_instance",
+            {"publicly_accessible": True, "storage_encrypted": True},
+        )
         evaluate_policies(self.user)
-        violation = PolicyViolation.objects.get(policy__code="GUARD-RDS-PUBLIC", resource=resource)
+        violation = PolicyViolation.objects.get(
+            policy__code="GUARD-RDS-PUBLIC",
+            resource=resource,
+        )
         self.assertEqual(violation.status, PolicyViolation.Status.OPEN)
         resource.metadata["publicly_accessible"] = False
         resource.save(update_fields=["metadata"])
@@ -79,8 +94,15 @@ class PolicyGuardrailTests(APITestCase):
         )
         self.resource("scoped", "aws.ec2.instance", {"public_ip_address": "203.0.113.20"})
         CloudResource.objects.create(
-            provider="aws", cloud_account=other, provider_resource_id="test:other", resource_type="aws.ec2.instance",
-            name="other", region="us-east-1", state="running", is_active=True, last_seen=timezone.now(),
+            provider="aws",
+            cloud_account=other,
+            provider_resource_id="test:other",
+            resource_type="aws.ec2.instance",
+            name="other",
+            region="us-east-1",
+            state="running",
+            is_active=True,
+            last_seen=timezone.now(),
             metadata={"public_ip_address": "203.0.113.21"},
         )
         policy = GovernancePolicy.objects.get(code="GUARD-EC2-PUBLIC-IP")
@@ -88,12 +110,18 @@ class PolicyGuardrailTests(APITestCase):
         policy.save(update_fields=["cloud_account"])
         run = evaluate_policies(self.user)
         self.assertEqual(run.violated_count, 1)
-        self.assertEqual(PolicyViolation.objects.filter(policy=policy, status="open").count(), 1)
+        self.assertEqual(
+            PolicyViolation.objects.filter(policy=policy, status="open").count(),
+            1,
+        )
 
     def test_auditor_cannot_write_or_evaluate(self):
         auditor = User.objects.create_user(username="auditor", password="password")
         Group.objects.get_or_create(name=AUDITOR)[0].user_set.add(auditor)
         self.client.force_authenticate(auditor)
         self.assertEqual(self.client.post("/api/policies/evaluate/").status_code, 403)
-        self.assertEqual(self.client.post("/api/policies/", {"code": "CUSTOM"}, format="json").status_code, 403)
+        self.assertEqual(
+            self.client.post("/api/policies/", {"code": "CUSTOM"}, format="json").status_code,
+            403,
+        )
         self.assertEqual(self.client.get("/api/policies/summary/").status_code, 200)
