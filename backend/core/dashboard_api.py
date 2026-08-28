@@ -26,6 +26,14 @@ def _previous_month_period(today):
     return previous_start, previous_end
 
 
+def _daily_series(queryset):
+    return list(
+        queryset.values("usage_date")
+        .annotate(total=Sum("amount"))
+        .order_by("usage_date")
+    )
+
+
 def _attention_item(*, severity, kind, title, detail, target, object_id=None):
     return {
         "severity": severity,
@@ -166,12 +174,10 @@ def operational_dashboard(request):
     previous_start, previous_end = _previous_month_period(today)
 
     costs = CostRecord.objects.select_related("cloud_account", "project")
-    mtd = _decimal_total(
-        costs.filter(usage_date__gte=month_start, usage_date__lte=today)
-    )
-    previous_comparable = _decimal_total(
-        costs.filter(usage_date__gte=previous_start, usage_date__lt=previous_end)
-    )
+    mtd_costs = costs.filter(usage_date__gte=month_start, usage_date__lte=today)
+    previous_costs = costs.filter(usage_date__gte=previous_start, usage_date__lt=previous_end)
+    mtd = _decimal_total(mtd_costs)
+    previous_comparable = _decimal_total(previous_costs)
     change_percent = None
     if previous_comparable:
         change_percent = (
@@ -200,7 +206,6 @@ def operational_dashboard(request):
         ),
     }
 
-    mtd_costs = costs.filter(usage_date__gte=month_start, usage_date__lte=today)
     top_costs = {
         "service": list(
             mtd_costs.values("service")
@@ -248,6 +253,8 @@ def operational_dashboard(request):
                 "previous_comparable": previous_comparable,
                 "change_percent": change_percent,
                 "currency": "USD",
+                "daily": _daily_series(mtd_costs),
+                "previous_daily": _daily_series(previous_costs),
             },
             "resources": resources,
             "top_costs": top_costs,
