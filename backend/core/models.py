@@ -331,6 +331,56 @@ class PolicyRun(models.Model):
         return f"Policy evaluation {self.started_at.isoformat()}"
 
 
+class Budget(models.Model):
+    name = models.CharField(max_length=200)
+    amount = models.DecimalField(max_digits=20, decimal_places=2)
+    currency = models.CharField(max_length=16, default="USD")
+    warning_threshold = models.DecimalField(max_digits=5, decimal_places=2, default=80)
+    critical_threshold = models.DecimalField(max_digits=5, decimal_places=2, default=90)
+    enabled = models.BooleanField(default=True, db_index=True)
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, null=True, blank=True, related_name="budgets")
+    node = models.ForeignKey(OrganizationNode, on_delete=models.CASCADE, null=True, blank=True, related_name="budgets")
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, null=True, blank=True, related_name="budgets")
+    cloud_account = models.ForeignKey(CloudAccount, on_delete=models.CASCADE, null=True, blank=True, related_name="budgets")
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="created_budgets")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name", "id"]
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class BudgetAlert(models.Model):
+    class Level(models.TextChoices):
+        WARNING = "warning", "Warning"
+        CRITICAL = "critical", "Critical"
+        EXCEEDED = "exceeded", "Exceeded"
+
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        RESOLVED = "resolved", "Resolved"
+
+    budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name="alerts")
+    period = models.DateField(db_index=True)
+    level = models.CharField(max_length=16, choices=Level.choices)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.OPEN, db_index=True)
+    actual_amount = models.DecimalField(max_digits=20, decimal_places=2)
+    utilization = models.DecimalField(max_digits=8, decimal_places=2)
+    first_seen = models.DateTimeField()
+    last_seen = models.DateTimeField()
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["status", "-period", "budget__name", "level"]
+        constraints = [models.UniqueConstraint(fields=["budget", "period", "level"], name="uniq_budget_alert_period_level")]
+
+    def __str__(self) -> str:
+        return f"{self.budget} {self.period} {self.level}"
+
+
 class AuditEvent(models.Model):
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     action = models.CharField(max_length=100)
