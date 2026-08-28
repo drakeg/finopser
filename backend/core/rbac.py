@@ -33,4 +33,8 @@ class GovernancePermission(BasePermission):
 
 class PlatformAdminPermission(BasePermission):
     def has_permission(self, request, view):
-        return user_has_role(request.user, {PLATFORM_ADMIN})
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        return request.user.groups.filter(name=PLATFORM_ADMIN).exists()
