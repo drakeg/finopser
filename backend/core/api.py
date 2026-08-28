@@ -6,6 +6,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from .audit import record_audit
+from .entitlements import user_organization
 from .inventory import sync_inventory
 from .models import (
     AuditEvent,
@@ -30,6 +31,13 @@ from .serializers import (
 )
 
 
+def _organization_id(request):
+    if request.user.is_superuser:
+        return None
+    organization = user_organization(request.user)
+    return organization.id if organization else -1
+
+
 class AuditedModelViewSet(viewsets.ModelViewSet):
     permission_classes = [GovernancePermission]
 
@@ -47,35 +55,45 @@ class AuditedModelViewSet(viewsets.ModelViewSet):
 
 
 class OrganizationViewSet(AuditedModelViewSet):
-    queryset = Organization.objects.all().order_by("name")
     serializer_class = OrganizationSerializer
+
+    def get_queryset(self):
+        queryset = Organization.objects.all().order_by("name")
+        organization_id = _organization_id(self.request)
+        return queryset if organization_id is None else queryset.filter(id=organization_id)
 
 
 class OrganizationNodeViewSet(AuditedModelViewSet):
-    queryset = (
-        OrganizationNode.objects.select_related("organization", "parent")
-        .all()
-        .order_by("organization__name", "name")
-    )
     serializer_class = OrganizationNodeSerializer
+
+    def get_queryset(self):
+        queryset = OrganizationNode.objects.select_related("organization", "parent").order_by(
+            "organization__name", "name"
+        )
+        organization_id = _organization_id(self.request)
+        return queryset if organization_id is None else queryset.filter(organization_id=organization_id)
 
 
 class ProjectViewSet(AuditedModelViewSet):
-    queryset = (
-        Project.objects.select_related("organization", "node")
-        .all()
-        .order_by("organization__name", "name")
-    )
     serializer_class = ProjectSerializer
+
+    def get_queryset(self):
+        queryset = Project.objects.select_related("organization", "node").order_by(
+            "organization__name", "name"
+        )
+        organization_id = _organization_id(self.request)
+        return queryset if organization_id is None else queryset.filter(organization_id=organization_id)
 
 
 class CloudAccountViewSet(AuditedModelViewSet):
-    queryset = (
-        CloudAccount.objects.select_related("organization", "project")
-        .all()
-        .order_by("provider", "name")
-    )
     serializer_class = CloudAccountSerializer
+
+    def get_queryset(self):
+        queryset = CloudAccount.objects.select_related("organization", "project").order_by(
+            "provider", "name"
+        )
+        organization_id = _organization_id(self.request)
+        return queryset if organization_id is None else queryset.filter(organization_id=organization_id)
 
     def perform_update(self, serializer):
         account = serializer.save(
@@ -166,6 +184,9 @@ class CloudResourceViewSet(
 
     def get_queryset(self):
         queryset = CloudResource.objects.select_related("cloud_account").all()
+        organization_id = _organization_id(self.request)
+        if organization_id is not None:
+            queryset = queryset.filter(cloud_account__organization_id=organization_id)
         filters = {
             "cloud_account_id": self.request.query_params.get("cloud_account"),
             "resource_type": self.request.query_params.get("resource_type"),
@@ -209,6 +230,9 @@ class InventorySyncViewSet(
 
     def get_queryset(self):
         queryset = InventorySync.objects.select_related("cloud_account").all()
+        organization_id = _organization_id(self.request)
+        if organization_id is not None:
+            queryset = queryset.filter(cloud_account__organization_id=organization_id)
         cloud_account = self.request.query_params.get("cloud_account")
         if cloud_account:
             queryset = queryset.filter(cloud_account_id=cloud_account)
@@ -216,9 +240,14 @@ class InventorySyncViewSet(
 
 
 class AuditEventViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
-    queryset = AuditEvent.objects.select_related("actor").all()
     serializer_class = AuditEventSerializer
     permission_classes = [GovernancePermission]
+
+    def get_queryset(self):
+        queryset = AuditEvent.objects.select_related("actor").all()
+        if self.request.user.is_superuser:
+            return queryset
+        return queryset.filter(actor=self.request.user)
 
 
 class UserRoleViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
