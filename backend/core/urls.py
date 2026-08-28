@@ -18,11 +18,18 @@ from .compliance_api import (
     FindingViewSet,
     FrameworkViewSet,
     RunViewSet,
-    evaluate,
-    summary,
+    evaluate as evaluate_compliance,
+    summary as compliance_summary,
 )
 from .cost_api import CostRecordViewSet, CostSyncViewSet, sync_account_costs
 from .dashboard_api import operational_dashboard
+from .policy_api import (
+    PolicyRunViewSet,
+    PolicyViewSet,
+    ViolationViewSet,
+    evaluate as evaluate_policies,
+    summary as policy_summary,
+)
 
 router = DefaultRouter()
 router.register("organizations", OrganizationViewSet)
@@ -38,6 +45,9 @@ router.register("compliance/controls", ControlViewSet, basename="compliance-cont
 router.register("compliance/findings", FindingViewSet, basename="compliance-finding")
 router.register("compliance/exceptions", ExceptionViewSet, basename="compliance-exception")
 router.register("compliance/runs", RunViewSet, basename="compliance-run")
+router.register("policies", PolicyViewSet, basename="policy")
+router.register("policy-violations", ViolationViewSet, basename="policy-violation")
+router.register("policy-runs", PolicyRunViewSet, basename="policy-run")
 router.register("audit-events", AuditEventViewSet)
 router.register("users", UserRoleViewSet)
 
@@ -48,8 +58,10 @@ urlpatterns = [
     path("auth/session/", views.session, name="session"),
     path("auth/me/", views.me, name="me"),
     path("dashboard/", operational_dashboard, name="operational-dashboard"),
-    path("compliance/evaluate/", evaluate, name="compliance-evaluate"),
-    path("compliance/summary/", summary, name="compliance-summary"),
+    path("compliance/evaluate/", evaluate_compliance, name="compliance-evaluate"),
+    path("compliance/summary/", compliance_summary, name="compliance-summary"),
+    path("policies/evaluate/", evaluate_policies, name="policy-evaluate"),
+    path("policies/summary/", policy_summary, name="policy-summary"),
     path("cloud-accounts/<int:pk>/sync-costs/", sync_account_costs, name="sync-account-costs"),
     path("", include(router.urls)),
 ]
