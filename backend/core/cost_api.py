@@ -11,7 +11,7 @@ from rest_framework.response import Response
 
 from .audit import record_audit
 from .costs import sync_costs
-from .entitlements import user_organization
+from .entitlements import organization_scope_id
 from .models import CloudAccount, CostRecord, CostSync
 from .rbac import GovernancePermission
 
@@ -70,18 +70,11 @@ def _total(queryset):
     return queryset.aggregate(total=Sum("amount"))["total"] or 0
 
 
-def _organization_id(user):
-    if user.is_superuser:
-        return None
-    organization = user_organization(user)
-    return organization.id if organization else -1
-
-
 @api_view(["POST"])
 @permission_classes([GovernancePermission])
 def sync_account_costs(request, pk: int):
     queryset = CloudAccount.objects.all()
-    organization_id = _organization_id(request.user)
+    organization_id = organization_scope_id(request.user)
     if organization_id is not None:
         queryset = queryset.filter(organization_id=organization_id)
     try:
@@ -137,7 +130,7 @@ class CostRecordViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewse
 
     def get_queryset(self):
         queryset = CostRecord.objects.select_related("cloud_account", "project").all()
-        organization_id = _organization_id(self.request.user)
+        organization_id = organization_scope_id(self.request.user)
         if organization_id is not None:
             queryset = queryset.filter(cloud_account__organization_id=organization_id)
         exact_filters = {
@@ -225,7 +218,7 @@ class CostSyncViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets
 
     def get_queryset(self):
         queryset = CostSync.objects.select_related("cloud_account").all()
-        organization_id = _organization_id(self.request.user)
+        organization_id = organization_scope_id(self.request.user)
         if organization_id is not None:
             queryset = queryset.filter(cloud_account__organization_id=organization_id)
         account = self.request.query_params.get("cloud_account")
