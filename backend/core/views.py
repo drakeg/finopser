@@ -1,5 +1,9 @@
 from django.conf import settings
-from django.contrib.auth import authenticate, login as django_login, logout as django_logout
+from django.contrib.auth import (
+    authenticate,
+    login as django_login,
+    logout as django_logout,
+)
 from django.db import connection
 from django.views.decorators.csrf import ensure_csrf_cookie
 from redis import Redis
