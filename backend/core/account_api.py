@@ -69,9 +69,14 @@ def _next_step(profile):
     accounts = CloudAccount.objects.filter(organization=organization)
     if not accounts.exists():
         return OnboardingProfile.Step.CLOUD_ACCOUNT
-    if not accounts.filter(status=CloudAccount.Status.VALID).exists():
+    valid_accounts = accounts.filter(status=CloudAccount.Status.VALID)
+    if not valid_accounts.exists():
         return OnboardingProfile.Step.VALIDATE
-    if not accounts.filter(inventory_syncs__isnull=False).exists():
+    synced = valid_accounts.filter(
+        inventory_syncs__status__in=[InventorySync.Status.SUCCESS, InventorySync.Status.PARTIAL],
+        cost_syncs__status__in=[CostSync.Status.SUCCESS, CostSync.Status.PARTIAL],
+    ).distinct()
+    if not synced.exists():
         return OnboardingProfile.Step.SYNC
     return OnboardingProfile.Step.COMPLETE
 
@@ -299,7 +304,7 @@ def initial_sync(request, pk: int):
     }
     costs_ok = cost_sync.status in {CostSync.Status.SUCCESS, CostSync.Status.PARTIAL}
     profile = _profile(request.user)
-    if inventory_ok:
+    if inventory_ok and costs_ok:
         _refresh_profile(profile)
     record_audit(
         request.user,
