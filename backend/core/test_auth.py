@@ -38,6 +38,50 @@ class WebConsoleAuthenticationTests(TestCase):
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json()["detail"], "Invalid username or password.")
 
+    def test_registration_creates_user_and_session(self):
+        self.client.get("/api/auth/session/")
+        response = self.client.post(
+            "/api/auth/register/",
+            {
+                "username": "new-user",
+                "email": "new@example.com",
+                "password": "long-test-password",
+                "password_confirm": "long-test-password",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.json()["authenticated"])
+        self.assertTrue(User.objects.filter(username="new-user", email="new@example.com").exists())
+        dashboard = self.client.get("/api/dashboard/")
+        self.assertEqual(dashboard.status_code, 200)
+
+    def test_registration_rejects_duplicate_username_and_mismatched_password(self):
+        duplicate = self.client.post(
+            "/api/auth/register/",
+            {
+                "username": "console-user",
+                "email": "other@example.com",
+                "password": "long-test-password",
+                "password_confirm": "long-test-password",
+            },
+            format="json",
+        )
+        mismatch = self.client.post(
+            "/api/auth/register/",
+            {
+                "username": "another-user",
+                "email": "another@example.com",
+                "password": "long-test-password",
+                "password_confirm": "different-password",
+            },
+            format="json",
+        )
+
+        self.assertEqual(duplicate.status_code, 400)
+        self.assertEqual(mismatch.status_code, 400)
+
     def test_logout_requires_csrf_and_ends_session(self):
         self.client.get("/api/auth/session/")
         self.client.post(
