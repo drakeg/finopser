@@ -62,6 +62,7 @@ urlpatterns = [
     path("billing/status/", billing_api.billing_status, name="billing-status"),
     path("billing/checkout/", billing_api.checkout, name="billing-checkout"),
     path("billing/portal/", billing_api.portal, name="billing-portal"),
+    path("billing/webhooks/stripe/", billing_api.stripe_webhook, name="billing-stripe-webhook"),
     path("account/bootstrap/", account_api.bootstrap, name="account-bootstrap"),
     path(
         "onboarding/organization/",
