@@ -17,14 +17,37 @@ Tenant isolation is being landed in reviewable slices so each feature family has
 - Preserve deliberate legacy/global and superuser behavior.
 - Add two-workspace tests proving list, retrieve, summary, and write isolation.
 
+### Slice 2 — Compliance
+
+- Scope findings, exceptions, evaluation, summaries, aggregates, and run history.
+- Evaluate only resources in the authenticated self-service workspace.
+- Reject exception targets outside the workspace.
+- Keep shared framework/control definitions global.
+- Add two-workspace regression coverage for reads, evaluation, aggregates, history, and writes.
+
+### Slice 3 — Governance policies
+
+- Scope custom policies, violations, evaluation, summaries, aggregates, and run history.
+- Keep built-in policies globally visible while tenant-created policies remain workspace-owned.
+- Force self-service policy creation into the current workspace and validate related scope objects.
+- Evaluate only resources in the authenticated workspace.
+- Add two-workspace regression coverage for reads, writes, evaluation, aggregates, and history.
+
+### Slice 4 — Recommendations
+
+- Add explicit organization ownership to recommendations and generation runs.
+- Change recommendation source identity from globally unique to organization + source key uniqueness.
+- Backfill existing recommendation ownership from account, project, or resource relationships where it can be inferred safely.
+- Scope cost growth, budget, untagged-resource, and policy-violation generation inputs to the authenticated workspace.
+- Scope stale recommendation resolution, run counts, reads, summaries, actions, and run history.
+- Add two-workspace tests proving generation cannot create, expose, mutate, aggregate, or resolve another workspace's recommendations.
+
 ### Remaining Sprint 13 slices
 
-- Compliance findings, exceptions, evaluation, summaries, and run history.
-- Governance policies, violations, evaluation, summaries, and run history.
-- Recommendations, generation, actions, summaries, and run history.
 - Remediation requests, events, target validation, and summaries.
-- Organization ownership for historical run/audit records where schema ownership is currently ambiguous.
-- Background evaluation scoping and exhaustive cross-tenant regression tests.
+- Organization ownership for remaining historical run/audit records where schema ownership is ambiguous.
+- Core relationship validation for organization/node/project/account references.
+- Background evaluation scoping and final exhaustive cross-tenant regression tests.
 
 ## Safety gate
 

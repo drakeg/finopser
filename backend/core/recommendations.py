@@ -7,14 +7,19 @@ from django.utils import timezone
 
 from .audit import record_audit
 from .budgets import budget_snapshot
+from .entitlements import organization_scope_id, user_organization
 from .models import Budget, CloudResource, CostRecord, PolicyViolation
 from .recommendation_models import Recommendation, RecommendationRun
 
 
-def _upsert(source_key, defaults, now):
-    recommendation = Recommendation.objects.filter(source_key=source_key).first()
+def _upsert(organization, source_key, defaults, now):
+    recommendation = Recommendation.objects.filter(
+        organization=organization,
+        source_key=source_key,
+    ).first()
     if recommendation is None:
         return Recommendation.objects.create(
+            organization=organization,
             source_key=source_key,
             first_seen=now,
             last_seen=now,
@@ -30,25 +35,30 @@ def _upsert(source_key, defaults, now):
     return recommendation, False
 
 
-def _cost_growth_candidates(today):
+def _cost_growth_candidates(today, organization_id=None):
     month_start = today.replace(day=1)
     previous_month_end = month_start - timedelta(days=1)
     previous_start = previous_month_end.replace(day=1)
     comparable_days = min(today.day, previous_month_end.day)
     previous_end = previous_start + timedelta(days=comparable_days)
+    current_costs = CostRecord.objects.filter(usage_date__gte=month_start, usage_date__lte=today)
+    previous_costs = CostRecord.objects.filter(
+        usage_date__gte=previous_start,
+        usage_date__lt=previous_end,
+    )
+    if organization_id is not None:
+        current_costs = current_costs.filter(cloud_account__organization_id=organization_id)
+        previous_costs = previous_costs.filter(cloud_account__organization_id=organization_id)
     current = (
-        CostRecord.objects.filter(usage_date__gte=month_start, usage_date__lte=today)
-        .values("cloud_account", "cloud_account__name", "project", "service", "currency")
-        .annotate(total=Sum("amount"))
+        current_costs.values(
+            "cloud_account", "cloud_account__name", "project", "service", "currency"
+        ).annotate(total=Sum("amount"))
     )
     previous = {
         (row["cloud_account"], row["service"], row["currency"]): row["total"]
-        for row in CostRecord.objects.filter(
-            usage_date__gte=previous_start,
-            usage_date__lt=previous_end,
+        for row in previous_costs.values("cloud_account", "service", "currency").annotate(
+            total=Sum("amount")
         )
-        .values("cloud_account", "service", "currency")
-        .annotate(total=Sum("amount"))
     }
     days_in_month = calendar.monthrange(today.year, today.month)[1]
     for row in current:
@@ -70,17 +80,20 @@ def _cost_growth_candidates(today):
 def generate_recommendations(actor=None, today=None):
     today = today or timezone.localdate()
     now = timezone.now()
-    run = RecommendationRun.objects.create(started_at=now)
+    organization_id = organization_scope_id(actor) if actor is not None else None
+    organization = user_organization(actor) if actor is not None else None
+    run = RecommendationRun.objects.create(organization=organization, started_at=now)
     seen = set()
     generated = 0
 
-    for row, prior, growth, monthly_excess in _cost_growth_candidates(today):
+    for row, prior, growth, monthly_excess in _cost_growth_candidates(today, organization_id):
         source_key = (
             f"cost-growth:{today:%Y-%m}:{row['cloud_account']}:"
             f"{row['service']}:{row['currency']}"
         )
         seen.add(source_key)
         _, created = _upsert(
+            organization,
             source_key,
             {
                 "source_type": "cost_growth",
@@ -115,7 +128,10 @@ def generate_recommendations(actor=None, today=None):
         )
         generated += int(created)
 
-    for budget in Budget.objects.filter(enabled=True).order_by("id"):
+    budgets = Budget.objects.filter(enabled=True).order_by("id")
+    if organization_id is not None:
+        budgets = budgets.filter(organization_id=organization_id)
+    for budget in budgets:
         snapshot = budget_snapshot(budget, today)
         if snapshot["forecast"] is None or snapshot["forecast"] <= budget.amount:
             continue
@@ -124,6 +140,7 @@ def generate_recommendations(actor=None, today=None):
         overage = snapshot["forecast"] - budget.amount
         ratio = snapshot["forecast"] / budget.amount
         _, created = _upsert(
+            organization,
             source_key,
             {
                 "source_type": "budget_forecast",
@@ -158,12 +175,16 @@ def generate_recommendations(actor=None, today=None):
         )
         generated += int(created)
 
-    for resource in CloudResource.objects.filter(is_active=True, tags={}).select_related(
+    resources = CloudResource.objects.filter(is_active=True, tags={}).select_related(
         "cloud_account"
-    ):
+    )
+    if organization_id is not None:
+        resources = resources.filter(cloud_account__organization_id=organization_id)
+    for resource in resources:
         source_key = f"untagged-resource:{resource.id}"
         seen.add(source_key)
         _, created = _upsert(
+            organization,
             source_key,
             {
                 "source_type": "untagged_resource",
@@ -197,6 +218,8 @@ def generate_recommendations(actor=None, today=None):
     violations = PolicyViolation.objects.filter(
         status=PolicyViolation.Status.OPEN
     ).select_related("policy", "resource", "cloud_account")
+    if organization_id is not None:
+        violations = violations.filter(cloud_account__organization_id=organization_id)
     for violation in violations:
         source_key = f"policy-violation:{violation.id}"
         seen.add(source_key)
@@ -206,6 +229,7 @@ def generate_recommendations(actor=None, today=None):
             else Recommendation.Priority.MEDIUM
         )
         _, created = _upsert(
+            organization,
             source_key,
             {
                 "source_type": "policy_violation",
@@ -234,9 +258,12 @@ def generate_recommendations(actor=None, today=None):
         generated += int(created)
 
     resolved = 0
-    stale = Recommendation.objects.filter(status=Recommendation.Status.OPEN).exclude(
-        source_key__in=seen
-    )
+    stale = Recommendation.objects.filter(status=Recommendation.Status.OPEN)
+    if organization_id is not None:
+        stale = stale.filter(organization_id=organization_id)
+    else:
+        stale = stale.filter(organization=organization)
+    stale = stale.exclude(source_key__in=seen)
     for recommendation in stale:
         recommendation.status = Recommendation.Status.RESOLVED
         recommendation.resolved_at = now
@@ -244,13 +271,16 @@ def generate_recommendations(actor=None, today=None):
         recommendation.save(update_fields=["status", "resolved_at", "last_seen"])
         resolved += 1
 
+    scoped_recommendations = Recommendation.objects.all()
+    if organization_id is not None:
+        scoped_recommendations = scoped_recommendations.filter(organization_id=organization_id)
+    else:
+        scoped_recommendations = scoped_recommendations.filter(organization=organization)
     run.completed_at = timezone.now()
     run.generated_count = generated
     run.resolved_count = resolved
-    run.open_count = Recommendation.objects.filter(
-        status=Recommendation.Status.OPEN
-    ).count()
-    run.dismissed_count = Recommendation.objects.filter(
+    run.open_count = scoped_recommendations.filter(status=Recommendation.Status.OPEN).count()
+    run.dismissed_count = scoped_recommendations.filter(
         status=Recommendation.Status.DISMISSED
     ).count()
     run.save()
@@ -264,6 +294,7 @@ def generate_recommendations(actor=None, today=None):
                 "resolved": resolved,
                 "open": run.open_count,
                 "dismissed": run.dismissed_count,
+                "organization_id": organization_id,
             },
         )
     return run
