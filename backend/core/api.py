@@ -278,11 +278,11 @@ class AuditEventViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewse
     permission_classes = [GovernancePermission]
 
     def get_queryset(self):
-        queryset = AuditEvent.objects.select_related("actor").all()
+        queryset = AuditEvent.objects.select_related("organization", "actor").all()
         scope_id = organization_scope_id(self.request.user)
         if scope_id is None:
             return queryset
-        return queryset.filter(actor=self.request.user)
+        return queryset.filter(organization_id=scope_id)
 
 
 class UserRoleViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):

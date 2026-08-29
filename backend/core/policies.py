@@ -91,10 +91,13 @@ def _resources_for_policy(policy, organization_id=None):
 
 def evaluate_policies(actor=None):
     now = timezone.now()
-    run = PolicyRun.objects.create(started_at=now)
+    organization_id = organization_scope_id(actor) if actor is not None else None
+    run = PolicyRun.objects.create(
+        started_at=now,
+        organization_id=organization_id if organization_id not in {None, -1} else None,
+    )
     ensure_builtin_policies()
     passed = violated = unknown = resolved = 0
-    organization_id = organization_scope_id(actor) if actor is not None else None
 
     policies = GovernancePolicy.objects.filter(enabled=True).order_by("code")
     if organization_id is not None:
