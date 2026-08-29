@@ -6,6 +6,7 @@ from rest_framework.response import Response
 
 from .audit import record_audit
 from .automation_models import RemediationAction, RemediationEvent
+from .entitlements import organization_scope_id
 from .rbac import (
     CLOUD_ADMIN,
     FINOPS_ANALYST,
@@ -22,6 +23,7 @@ from .remediation import (
     preview_action,
     reject_action,
 )
+from .tenant_scope import validate_related_organization
 
 REQUEST_ROLES = {PLATFORM_ADMIN, CLOUD_ADMIN, FINOPS_ANALYST, SECURITY_ENGINEER}
 EXECUTE_ROLES = {PLATFORM_ADMIN, CLOUD_ADMIN}
@@ -34,6 +36,21 @@ class RemediationPermission(BasePermission):
         if request.method in SAFE_METHODS:
             return True
         return user_has_role(request.user, REQUEST_ROLES)
+
+
+def _action_queryset(user):
+    queryset = RemediationAction.objects.select_related(
+        "recommendation",
+        "resource",
+        "cloud_account",
+        "requested_by",
+        "approved_by",
+        "executed_by",
+    ).prefetch_related("events")
+    organization_id = organization_scope_id(user)
+    if organization_id is not None:
+        queryset = queryset.filter(cloud_account__organization_id=organization_id)
+    return queryset
 
 
 class RemediationEventSerializer(serializers.ModelSerializer):
@@ -109,6 +126,14 @@ class RemediationActionSerializer(serializers.ModelSerializer):
         if recommendation and recommendation.resource_id and resource:
             if recommendation.resource_id != resource.id:
                 raise serializers.ValidationError("Recommendation resource must match the remediation resource.")
+        if recommendation and account and recommendation.organization_id:
+            if recommendation.organization_id != account.organization_id:
+                raise serializers.ValidationError(
+                    "Recommendation must belong to the selected cloud account organization."
+                )
+        request = self.context.get("request")
+        if request:
+            validate_related_organization(request.user, account, resource, recommendation)
         if attrs.get("action_key") not in ACTION_REGISTRY:
             raise serializers.ValidationError("Action is not allowlisted.")
         return attrs
@@ -120,14 +145,7 @@ class RemediationActionViewSet(viewsets.ModelViewSet):
     http_method_names = ["get", "post", "head", "options"]
 
     def get_queryset(self):
-        queryset = RemediationAction.objects.select_related(
-            "recommendation",
-            "resource",
-            "cloud_account",
-            "requested_by",
-            "approved_by",
-            "executed_by",
-        ).prefetch_related("events")
+        queryset = _action_queryset(self.request.user)
         for field in ("status", "action_key", "simulation", "cloud_account", "resource"):
             value = self.request.query_params.get(field)
             if value is not None:
@@ -211,7 +229,7 @@ def action_catalog(request):
 @api_view(["GET"])
 @permission_classes([RemediationPermission])
 def summary(request):
-    actions = RemediationAction.objects.all()
+    actions = _action_queryset(request.user)
     return Response(
         {
             "total": actions.count(),
