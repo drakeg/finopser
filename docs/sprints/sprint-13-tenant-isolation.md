@@ -59,10 +59,18 @@ Tenant isolation is being landed in reviewable slices so each feature family has
 - Confirm organization-node parents, project nodes, and cloud-account projects cannot cross workspace boundaries through API writes.
 - Add two-workspace regression coverage for audit visibility and related-object validation.
 
-### Remaining Sprint 13 slices
+### Slice 7 — Background execution audit and final gate
+
+- Audit Celery configuration and repository task entry points before introducing any tenant-triggered background evaluation.
+- Confirm there are currently no registered core `shared_task`/`.delay()` governance jobs and that `CELERY_BEAT_SCHEDULE` is intentionally empty.
+- Require any future scheduled or asynchronous budget, compliance, policy, recommendation, or remediation evaluation to accept an explicit organization scope rather than operate over global tenant tables.
+- Run the complete two-workspace regression suite as the final Sprint 13 acceptance gate.
+- Keep payment-provider activation blocked until issue #33 is closed.
+
+### Remaining Sprint 13 work
 
 - Migrate remaining historical audit/run ownership to explicit schema fields where metadata ownership is insufficient.
-- Background evaluation scoping and final exhaustive cross-tenant regression tests.
+- Final exhaustive cross-tenant regression pass and issue #33 acceptance review.
 
 ## Safety gate
 
