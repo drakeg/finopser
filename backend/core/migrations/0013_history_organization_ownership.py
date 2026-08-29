@@ -1,5 +1,5 @@
-from django.db import migrations, models
 import django.db.models.deletion
+from django.db import migrations, models
 
 
 def backfill_history_organizations(apps, schema_editor):
