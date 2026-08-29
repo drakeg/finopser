@@ -48,6 +48,12 @@ PLAN_ENTITLEMENTS = {
     ),
 }
 
+PAID_ACCESS_STATUSES = {
+    Subscription.Status.TRIALING,
+    Subscription.Status.ACTIVE,
+    Subscription.Status.PAST_DUE,
+}
+
 
 def user_organization(user):
     if not user or not user.is_authenticated:
@@ -80,11 +86,21 @@ def organization_subscription(organization):
     return subscription
 
 
+def effective_plan(subscription: Subscription) -> str:
+    if subscription.plan == Subscription.Plan.FREE:
+        return Subscription.Plan.FREE
+    if subscription.status in PAID_ACCESS_STATUSES:
+        return subscription.plan
+    return Subscription.Plan.FREE
+
+
 def entitlement_payload(organization):
     subscription = organization_subscription(organization)
-    entitlements = PLAN_ENTITLEMENTS[subscription.plan]
+    active_plan = effective_plan(subscription)
+    entitlements = PLAN_ENTITLEMENTS[active_plan]
     return {
         "plan": subscription.plan,
+        "effective_plan": active_plan,
         "status": subscription.status,
         "billing_configured": bool(subscription.billing_provider),
         "max_cloud_accounts": entitlements.max_cloud_accounts,
