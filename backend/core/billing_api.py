@@ -14,7 +14,7 @@ from .billing import (
     billing_provider_configured,
     get_billing_provider,
 )
-from .entitlements import organization_subscription, user_organization
+from .entitlements import entitlement_payload, organization_subscription, user_organization
 
 
 def _subscription_for_user(user):
@@ -27,17 +27,23 @@ def _subscription_for_user(user):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def billing_status(request):
-    subscription = _subscription_for_user(request.user)
-    if subscription is None:
+    organization = user_organization(request.user)
+    if organization is None:
         return Response({"detail": "Complete organization setup first."}, status=400)
+    subscription = organization_subscription(organization)
+    entitlements = entitlement_payload(organization)
     return Response(
         {
             "configured": billing_provider_configured(),
             "provider": subscription.billing_provider or None,
             "plan": subscription.plan,
+            "effective_plan": entitlements["effective_plan"],
             "status": subscription.status,
             "current_period_end": subscription.current_period_end,
             "can_manage": bool(subscription.provider_customer_id and billing_provider_configured()),
+            "max_cloud_accounts": entitlements["max_cloud_accounts"],
+            "usage": entitlements["usage"],
+            "over_limit": entitlements["over_limit"],
         }
     )
 
