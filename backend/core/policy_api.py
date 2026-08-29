@@ -7,7 +7,7 @@ from rest_framework.response import Response
 
 from .audit import record_audit
 from .entitlements import organization_scope_id, user_organization
-from .models import AuditEvent, GovernancePolicy, PolicyRun, PolicyViolation
+from .models import GovernancePolicy, PolicyRun, PolicyViolation
 from .policies import BUILTIN_POLICY_CODES, evaluate_policies
 from .rbac import CLOUD_ADMIN, PLATFORM_ADMIN, SECURITY_ENGINEER, user_has_role
 from .tenant_scope import validate_related_organization
@@ -48,16 +48,11 @@ def _violation_queryset(user):
 
 
 def _run_queryset(user):
-    queryset = PolicyRun.objects.all()
+    queryset = PolicyRun.objects.select_related("organization").all()
     organization_id = _organization_id(user)
     if organization_id is None:
         return queryset
-    run_ids = AuditEvent.objects.filter(
-        action="policy.evaluate",
-        metadata__organization_id=organization_id,
-        object_type="PolicyRun",
-    ).values_list("object_id", flat=True)
-    return queryset.filter(id__in=run_ids)
+    return queryset.filter(organization_id=organization_id)
 
 
 class PolicySerializer(serializers.ModelSerializer):
