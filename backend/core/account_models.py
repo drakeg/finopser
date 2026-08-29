@@ -67,6 +67,31 @@ class Subscription(models.Model):
         return f"{self.organization}: {self.plan} ({self.status})"
 
 
+class BillingEvent(models.Model):
+    provider = models.CharField(max_length=32)
+    event_id = models.CharField(max_length=255)
+    event_type = models.CharField(max_length=128)
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="billing_events",
+    )
+    processed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["provider", "event_id"],
+                name="uniq_billing_provider_event",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.provider}:{self.event_id} ({self.event_type})"
+
+
 class OnboardingProfile(models.Model):
     class Step(models.TextChoices):
         ORGANIZATION = "organization", "Create organization"
