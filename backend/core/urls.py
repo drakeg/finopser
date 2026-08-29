@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from . import (
     account_api,
+    billing_api,
     budget_api,
     compliance_api,
     policy_api,
@@ -58,6 +59,9 @@ urlpatterns = [
     path("auth/logout/", views.logout, name="logout"),
     path("auth/me/", views.me, name="me"),
     path("plans/", account_api.plan_catalog, name="plan-catalog"),
+    path("billing/status/", billing_api.billing_status, name="billing-status"),
+    path("billing/checkout/", billing_api.checkout, name="billing-checkout"),
+    path("billing/portal/", billing_api.portal, name="billing-portal"),
     path("account/bootstrap/", account_api.bootstrap, name="account-bootstrap"),
     path(
         "onboarding/organization/",
