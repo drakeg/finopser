@@ -1,9 +1,18 @@
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from .billing import BillingDisabled, billing_provider_configured, get_billing_provider
+from .billing import (
+    BillingDisabled,
+    BillingError,
+    BillingSignatureError,
+    StripeBillingProvider,
+    apply_stripe_event,
+    billing_provider_configured,
+    get_billing_provider,
+)
 from .entitlements import organization_subscription, user_organization
 
 
@@ -52,6 +61,8 @@ def checkout(request):
             {"detail": str(exc), "billing_provider_configured": False},
             status=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
+    except BillingError as exc:
+        return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     return Response({"url": session.url})
 
 
@@ -71,4 +82,35 @@ def portal(request):
             {"detail": str(exc), "billing_provider_configured": False},
             status=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
+    except BillingError as exc:
+        return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     return Response({"url": session.url})
+
+
+@csrf_exempt
+@api_view(["POST"])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def stripe_webhook(request):
+    try:
+        provider = get_billing_provider()
+        if not isinstance(provider, StripeBillingProvider):
+            raise BillingDisabled("Stripe billing is not configured for this deployment.")
+        event = provider.verify_event(
+            request.body,
+            request.headers.get("Stripe-Signature", ""),
+        )
+        billing_event, processed = apply_stripe_event(event)
+    except BillingSignatureError as exc:
+        return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    except BillingDisabled as exc:
+        return Response({"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+    except BillingError as exc:
+        return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(
+        {
+            "received": True,
+            "processed": processed,
+            "event_id": billing_event.event_id,
+        }
+    )
