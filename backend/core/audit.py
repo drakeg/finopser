@@ -37,6 +37,7 @@ def record_audit(actor, action: str, obj, metadata=None) -> AuditEvent:
     if organization_id is not None:
         event_metadata.setdefault("organization_id", organization_id)
     return AuditEvent.objects.create(
+        organization_id=organization_id,
         actor=actor if getattr(actor, "is_authenticated", False) else None,
         action=action,
         object_type=obj.__class__.__name__,
