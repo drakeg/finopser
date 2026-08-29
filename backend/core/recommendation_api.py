@@ -2,10 +2,12 @@ from django.db.models import Case, Count, DecimalField, Sum, Value, When
 from django.utils import timezone
 from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import SAFE_METHODS, BasePermission
 from rest_framework.response import Response
 
 from .audit import record_audit
+from .entitlements import organization_scope_id
 from .rbac import (
     CLOUD_ADMIN,
     FINOPS_ANALYST,
@@ -26,6 +28,22 @@ class RecommendationPermission(BasePermission):
         if request.method in SAFE_METHODS:
             return True
         return user_has_role(request.user, RECOMMENDATION_ROLES)
+
+
+def _recommendation_queryset(user):
+    queryset = Recommendation.objects.all()
+    organization_id = organization_scope_id(user)
+    if organization_id is not None:
+        queryset = queryset.filter(organization_id=organization_id)
+    return queryset
+
+
+def _run_queryset(user):
+    queryset = RecommendationRun.objects.all()
+    organization_id = organization_scope_id(user)
+    if organization_id is not None:
+        queryset = queryset.filter(organization_id=organization_id)
+    return queryset
 
 
 class RecommendationSerializer(serializers.ModelSerializer):
@@ -86,7 +104,7 @@ class RecommendationViewSet(viewsets.ReadOnlyModelViewSet):
             When(priority="medium", then=Value(2)),
             default=Value(3),
         )
-        queryset = Recommendation.objects.select_related(
+        queryset = _recommendation_queryset(self.request.user).select_related(
             "cloud_account", "project", "resource"
         ).annotate(priority_rank=priority_order)
         for field in (
@@ -136,12 +154,16 @@ class RecommendationViewSet(viewsets.ReadOnlyModelViewSet):
 class RecommendationRunViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [RecommendationPermission]
     serializer_class = RecommendationRunSerializer
-    queryset = RecommendationRun.objects.all()
+
+    def get_queryset(self):
+        return _run_queryset(self.request.user)
 
 
 @api_view(["POST"])
 @permission_classes([RecommendationPermission])
 def generate(request):
+    if organization_scope_id(request.user) == -1:
+        raise PermissionDenied("Complete organization setup before generating recommendations.")
     run = generate_recommendations(request.user)
     return Response(RecommendationRunSerializer(run).data, status=status.HTTP_200_OK)
 
@@ -149,18 +171,19 @@ def generate(request):
 @api_view(["GET"])
 @permission_classes([RecommendationPermission])
 def summary(request):
-    open_items = Recommendation.objects.filter(status=Recommendation.Status.OPEN)
+    recommendations = _recommendation_queryset(request.user)
+    open_items = recommendations.filter(status=Recommendation.Status.OPEN)
     savings = open_items.aggregate(
         total=Sum("estimated_monthly_savings", output_field=DecimalField())
     )["total"]
-    latest = RecommendationRun.objects.first()
+    latest = _run_queryset(request.user).first()
     return Response(
         {
             "open": open_items.count(),
-            "dismissed": Recommendation.objects.filter(
+            "dismissed": recommendations.filter(
                 status=Recommendation.Status.DISMISSED
             ).count(),
-            "resolved": Recommendation.objects.filter(
+            "resolved": recommendations.filter(
                 status=Recommendation.Status.RESOLVED
             ).count(),
             "estimated_monthly_savings": savings,
