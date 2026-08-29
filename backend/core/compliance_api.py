@@ -10,7 +10,6 @@ from .audit import record_audit
 from .compliance import evaluate_compliance
 from .entitlements import organization_scope_id, user_organization
 from .models import (
-    AuditEvent,
     ComplianceControl,
     ComplianceException,
     ComplianceFinding,
@@ -57,16 +56,11 @@ def _exception_queryset(user):
 
 
 def _run_queryset(user):
-    queryset = ComplianceRun.objects.all()
+    queryset = ComplianceRun.objects.select_related("organization").all()
     organization_id = _organization_id(user)
     if organization_id is None:
         return queryset
-    run_ids = AuditEvent.objects.filter(
-        action="compliance.evaluate",
-        metadata__organization_id=organization_id,
-        object_type="ComplianceRun",
-    ).values_list("object_id", flat=True)
-    return queryset.filter(id__in=run_ids)
+    return queryset.filter(organization_id=organization_id)
 
 
 class FrameworkSerializer(serializers.ModelSerializer):
