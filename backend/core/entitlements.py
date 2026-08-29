@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from .account_models import OnboardingProfile, OrganizationMembership, Subscription
+from .models import CloudAccount
 
 
 @dataclass(frozen=True)
@@ -98,12 +99,18 @@ def entitlement_payload(organization):
     subscription = organization_subscription(organization)
     active_plan = effective_plan(subscription)
     entitlements = PLAN_ENTITLEMENTS[active_plan]
+    cloud_account_count = CloudAccount.objects.filter(organization=organization).count()
     return {
         "plan": subscription.plan,
         "effective_plan": active_plan,
         "status": subscription.status,
         "billing_configured": bool(subscription.billing_provider),
         "max_cloud_accounts": entitlements.max_cloud_accounts,
+        "usage": {
+            "cloud_accounts": cloud_account_count,
+            "cloud_accounts_over_limit": max(cloud_account_count - entitlements.max_cloud_accounts, 0),
+        },
+        "over_limit": cloud_account_count > entitlements.max_cloud_accounts,
         "features": {
             "inventory": True,
             "costs": True,

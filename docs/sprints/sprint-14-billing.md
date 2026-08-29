@@ -25,6 +25,15 @@ Add a production-shaped but disabled-by-default billing lifecycle on top of the 
 - Canceled/unpaid subscriptions retain their selected plan for history/display but receive Free entitlements through `effective_plan`.
 - Trialing, active, and past-due subscriptions keep paid entitlements. Past-due is an explicit dunning grace policy for now.
 
+## Slice 3 — Downgrade and over-limit behavior
+
+- A downgrade or cancellation never deletes cloud accounts or other tenant data.
+- Subscription and billing-status payloads expose the selected plan, effective plan, current cloud-account usage, effective account limit, and over-limit state.
+- Existing cloud accounts remain readable and manageable after a downgrade, including when usage exceeds the lower plan limit.
+- New cloud-account creation remains blocked while current usage is at or above the effective plan limit.
+- Paid feature families are governed by the effective plan, so canceled/unpaid subscriptions cannot continue using paid governance features even though their data remains stored.
+- This policy intentionally favors data preservation over destructive automatic cleanup. A tenant can reduce usage manually or restore a qualifying paid plan.
+
 ## Local configuration
 
 Billing remains disabled unless explicitly enabled:
@@ -51,6 +60,5 @@ No live provider activation, production webhook registration, plan purchase, or 
 
 ## Remaining Sprint 14 work
 
-- Frontend upgrade/manage-subscription experience using the billing endpoints.
-- Downgrade UX for organizations above lower-plan resource/member limits without deleting tenant data.
+- Frontend upgrade/manage-subscription experience using the billing endpoints, including billing-disabled and over-limit states.
 - Final billing lifecycle regression pass and issue #44 acceptance review.
