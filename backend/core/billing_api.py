@@ -4,6 +4,7 @@ from rest_framework.decorators import api_view, authentication_classes, permissi
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
+from .audit import record_audit
 from .billing import (
     BillingDisabled,
     BillingError,
@@ -107,6 +108,23 @@ def stripe_webhook(request):
         return Response({"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
     except BillingError as exc:
         return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+    if processed and billing_event.organization_id and billing_event.event_type.startswith(
+        "customer.subscription."
+    ):
+        subscription = organization_subscription(billing_event.organization)
+        record_audit(
+            None,
+            f"billing.{billing_event.event_type}",
+            subscription,
+            {
+                "provider": "stripe",
+                "provider_event_id": billing_event.event_id,
+                "plan": subscription.plan,
+                "status": subscription.status,
+            },
+        )
+
     return Response(
         {
             "received": True,
