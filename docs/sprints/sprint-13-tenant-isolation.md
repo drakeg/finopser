@@ -51,10 +51,17 @@ Tenant isolation is being landed in reviewable slices so each feature family has
 - Keep the allowlisted action catalog shared while all persisted request/event history remains reachable only through tenant-scoped actions.
 - Add two-workspace tests for list, retrieve, preview, create, mixed-target validation, and summary isolation.
 
+### Slice 6 — Audit ownership and core relationships
+
+- Stamp new audit records with an organization identifier inferred from the audited object or, when safe, the authenticated user's workspace.
+- Preserve explicit audit metadata while preventing object inference from overwriting an explicitly supplied organization identifier.
+- Keep existing tenant audit reads non-leaking while ownership metadata becomes durable for newly recorded events.
+- Confirm organization-node parents, project nodes, and cloud-account projects cannot cross workspace boundaries through API writes.
+- Add two-workspace regression coverage for audit visibility and related-object validation.
+
 ### Remaining Sprint 13 slices
 
-- Organization ownership for remaining historical audit records where schema ownership is ambiguous.
-- Core relationship validation for organization/node/project/account references.
+- Migrate remaining historical audit/run ownership to explicit schema fields where metadata ownership is insufficient.
 - Background evaluation scoping and final exhaustive cross-tenant regression tests.
 
 ## Safety gate
