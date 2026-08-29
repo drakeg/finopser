@@ -9,6 +9,7 @@ from rest_framework.response import Response
 
 from .account_models import OnboardingProfile, OrganizationMembership, Subscription
 from .audit import record_audit
+from .billing import billing_provider_configured
 from .costs import sync_costs
 from .entitlements import (
     entitlement_payload,
@@ -103,7 +104,12 @@ def _refresh_profile(profile):
 
 @api_view(["GET"])
 def plan_catalog(request):
-    return Response({"plans": PLAN_CATALOG, "billing_provider_configured": False})
+    return Response(
+        {
+            "plans": PLAN_CATALOG,
+            "billing_provider_configured": billing_provider_configured(),
+        }
+    )
 
 
 @api_view(["GET"])
