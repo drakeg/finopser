@@ -42,10 +42,18 @@ Tenant isolation is being landed in reviewable slices so each feature family has
 - Scope stale recommendation resolution, run counts, reads, summaries, actions, and run history.
 - Add two-workspace tests proving generation cannot create, expose, mutate, aggregate, or resolve another workspace's recommendations.
 
+### Slice 5 — Remediation
+
+- Scope remediation request/action reads and direct-ID actions through the target cloud account's organization.
+- Reject cross-workspace resource, cloud-account, and recommendation targets before a remediation request is created.
+- Ensure a recommendation cannot be paired with a target in a different organization.
+- Scope remediation summary counts and status aggregates to the authenticated workspace.
+- Keep the allowlisted action catalog shared while all persisted request/event history remains reachable only through tenant-scoped actions.
+- Add two-workspace tests for list, retrieve, preview, create, mixed-target validation, and summary isolation.
+
 ### Remaining Sprint 13 slices
 
-- Remediation requests, events, target validation, and summaries.
-- Organization ownership for remaining historical run/audit records where schema ownership is ambiguous.
+- Organization ownership for remaining historical audit records where schema ownership is ambiguous.
 - Core relationship validation for organization/node/project/account references.
 - Background evaluation scoping and final exhaustive cross-tenant regression tests.
 
