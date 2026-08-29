@@ -245,6 +245,13 @@ class ComplianceException(models.Model):
 
 
 class ComplianceRun(models.Model):
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="compliance_runs",
+    )
     started_at = models.DateTimeField()
     completed_at = models.DateTimeField(null=True, blank=True)
     passed_count = models.PositiveIntegerField(default=0)
@@ -317,6 +324,13 @@ class PolicyViolation(models.Model):
 
 
 class PolicyRun(models.Model):
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="policy_runs",
+    )
     started_at = models.DateTimeField()
     completed_at = models.DateTimeField(null=True, blank=True)
     passed_count = models.PositiveIntegerField(default=0)
@@ -382,6 +396,13 @@ class BudgetAlert(models.Model):
 
 
 class AuditEvent(models.Model):
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="audit_events",
+    )
     actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
     action = models.CharField(max_length=100)
     object_type = models.CharField(max_length=100)
