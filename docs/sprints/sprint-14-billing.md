@@ -34,6 +34,16 @@ Add a production-shaped but disabled-by-default billing lifecycle on top of the 
 - Paid feature families are governed by the effective plan, so canceled/unpaid subscriptions cannot continue using paid governance features even though their data remains stored.
 - This policy intentionally favors data preservation over destructive automatic cleanup. A tenant can reduce usage manually or restore a qualifying paid plan.
 
+## Slice 4 — Billing management UX
+
+- Authenticated console users get a Billing launcher that shows selected plan, effective plan, subscription status, cloud-account usage, and effective limit.
+- The billing panel renders the public Free/Pro/Business plan catalog and identifies the current selection.
+- Upgrade actions call the existing checkout endpoint only when billing is configured; disabled deployments show an explicit non-destructive billing-disabled message instead of a dead control.
+- Existing provider customers can open the configured provider billing portal from the same panel.
+- Over-limit workspaces receive a visible warning explaining that existing data is preserved while additional account creation stays blocked.
+- Payment details remain provider-hosted and are not collected or stored by the Finopser frontend.
+- Guided onboarding continues to show plan capabilities but defers paid-plan management until setup is complete.
+
 ## Local configuration
 
 Billing remains disabled unless explicitly enabled:
@@ -58,7 +68,8 @@ Webhook endpoint:
 
 No live provider activation, production webhook registration, plan purchase, or recurring spend is authorized by this sprint. Live Stripe keys are intentionally rejected. Production activation requires a separate explicit authorization and review.
 
-## Remaining Sprint 14 work
+## Sprint 14 acceptance review
 
-- Frontend upgrade/manage-subscription experience using the billing endpoints, including billing-disabled and over-limit states.
-- Final billing lifecycle regression pass and issue #44 acceptance review.
+The implementation now covers the issue #44 acceptance path in automated/backend-enforced form: Free subscriptions exist without payment details; paid-plan checkout is available through a provider-neutral boundary; signed/idempotent provider events are the trusted path for subscription state changes; entitlements follow effective subscription state; cancellation/downgrade preserves tenant data while enforcing lower limits; billing data stays organization-scoped; and the application remains fully usable with billing disabled.
+
+Production billing activation remains intentionally outside Sprint 14 and still requires separate authorization.
