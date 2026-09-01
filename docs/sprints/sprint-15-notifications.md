@@ -1,5 +1,9 @@
 # Sprint 15 — Notifications and actionable alerts
 
+## Status
+
+Complete. Representative governance, financial, operational, billing, recommendation, and remediation signals now surface as tenant-safe in-app notifications with personal read state and actionable console navigation.
+
 ## Goal
 
 Turn existing governance, FinOps, billing, remediation, and operational signals into tenant-safe actionable notifications without requiring an external paid delivery service.
@@ -75,6 +79,6 @@ List filters support `unread`, `category`, and `severity`.
 
 No external notification SaaS, paid email provider, Slack activation, production webhook registration, or recurring spend is enabled. Local and Docker operation continues with external delivery disabled.
 
-## Remaining follow-up
+## Follow-up boundary
 
 Optional external delivery adapters remain disabled and are intentionally deferred until an administrator explicitly chooses and configures a provider.
