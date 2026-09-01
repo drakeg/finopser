@@ -22,7 +22,7 @@ Turn existing governance, FinOps, billing, remediation, and operational signals 
 - Budget notifications deduplicate by organization, budget, period, and active level so repeated evaluation coalesces rather than creating new rows.
 - Compliance evaluation emits one coalesced high-severity notification per tenant while failing checks remain present.
 - Policy evaluation emits one coalesced high-severity notification per tenant while violations remain present.
-- Governance notifications carry console targets (`Budgets`, `Compliance`, `Policies`) and source object metadata for the upcoming UI navigation layer.
+- Governance notifications carry console targets (`Budgets`, `Compliance`, `Policies`) and source object metadata for UI navigation.
 - Regression tests cover source generation and repeated-event coalescing.
 
 ## Recommendation signal slice
@@ -30,7 +30,7 @@ Turn existing governance, FinOps, billing, remediation, and operational signals 
 - Open recommendations emit tenant-owned in-app notifications through the shared notification service.
 - Recommendation notifications use the stable recommendation source key for deduplication, so repeated generation refreshes the existing alert instead of creating a notification storm.
 - Notification severity follows recommendation priority and the action target routes users to `Recommendations`.
-- Source metadata includes the recommendation object identifier for upcoming console navigation.
+- Source metadata includes the recommendation object identifier for console navigation.
 - Regression coverage verifies repeated generation coalesces the notification and preserves actionable metadata.
 
 ## Operational sync signal slice
@@ -52,6 +52,15 @@ Turn existing governance, FinOps, billing, remediation, and operational signals 
 - Rejected actions stay quiet because they are deliberate operator decisions rather than conditions requiring additional attention.
 - Regression coverage verifies approval-required, stale, failed, and successful notification behavior without weakening the existing preview/approval/execution safety gates.
 
+## Operational console
+
+- Authenticated users get a persistent notification bell with their personal unread count.
+- The attention center shows recent alerts with severity, category, occurrence count, detail, timestamp, and action destination.
+- Operators can filter to unread alerts or a generated notification category without leaving the current console page.
+- Individual notifications can be marked read or unread, and all currently visible tenant notifications can be marked read through the audited API.
+- Selecting an actionable notification marks it read and navigates to the matching console section such as Budgets, Compliance, Policies, Recommendations, Accounts, Costs, or Automation.
+- The console refreshes notification state periodically while keeping external delivery disabled by default.
+
 ## API
 
 - `GET /api/notifications/`
@@ -66,7 +75,6 @@ List filters support `unread`, `category`, and `severity`.
 
 No external notification SaaS, paid email provider, Slack activation, production webhook registration, or recurring spend is enabled. Local and Docker operation continues with external delivery disabled.
 
-## Next slices
+## Remaining follow-up
 
-- Add operational-console notification bell/count, recent alerts, filtering, and navigation to relevant sections.
-- Add optional disabled-by-default external adapters after in-app behavior is stable.
+Optional external delivery adapters remain disabled and are intentionally deferred until an administrator explicitly chooses and configures a provider.
