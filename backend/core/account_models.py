@@ -92,6 +92,45 @@ class BillingEvent(models.Model):
         return f"{self.provider}:{self.event_id} ({self.event_type})"
 
 
+class Notification(models.Model):
+    class Severity(models.TextChoices):
+        INFO = "info", "Info"
+        WARNING = "warning", "Warning"
+        HIGH = "high", "High"
+        CRITICAL = "critical", "Critical"
+
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="notifications",
+    )
+    severity = models.CharField(max_length=16, choices=Severity.choices, default=Severity.INFO)
+    category = models.CharField(max_length=64, db_index=True)
+    title = models.CharField(max_length=255)
+    detail = models.TextField(blank=True)
+    target = models.CharField(max_length=100, blank=True)
+    object_type = models.CharField(max_length=100, blank=True)
+    object_id = models.CharField(max_length=100, blank=True)
+    dedupe_key = models.CharField(max_length=255)
+    is_read = models.BooleanField(default=False, db_index=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+    first_seen = models.DateTimeField(auto_now_add=True)
+    last_seen = models.DateTimeField(auto_now=True)
+    occurrence_count = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        ordering = ["-last_seen", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "dedupe_key"],
+                name="uniq_notification_org_dedupe",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.organization}: {self.title}"
+
+
 class OnboardingProfile(models.Model):
     class Step(models.TextChoices):
         ORGANIZATION = "organization", "Create organization"
