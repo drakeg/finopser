@@ -31,6 +31,15 @@ Turn existing governance, FinOps, billing, remediation, and operational signals 
 - Source metadata includes the recommendation object identifier for upcoming console navigation.
 - Regression coverage verifies repeated generation coalesces the notification and preserves actionable metadata.
 
+## Operational sync signal slice
+
+- Failed inventory and cost syncs emit critical operational notifications.
+- Partial inventory and cost syncs emit high-severity operational notifications while preserving the provider error detail.
+- Sync notifications deduplicate by organization/account/sync type/status so repeated provider failures coalesce instead of creating alert storms.
+- Successful syncs do not generate noise.
+- Inventory alerts target `Accounts`; cost alerts target `Costs`, with the affected cloud-account identifier included as action metadata.
+- Regression coverage verifies failed/partial generation, deduplication, severity, actionable target metadata, and quiet successful syncs.
+
 ## API
 
 - `GET /api/notifications/`
@@ -47,7 +56,7 @@ No external notification SaaS, paid email provider, Slack activation, production
 
 ## Next slices
 
-- Generate notifications from remediation lifecycle and inventory/cost sync failures through the notification service helper.
+- Generate notifications from remediation lifecycle through the notification service helper.
 - Add operational-console notification bell/count, recent alerts, filtering, and navigation to relevant sections.
 - Add audit coverage for notification state changes where appropriate.
 - Add optional disabled-by-default external adapters after in-app behavior is stable.

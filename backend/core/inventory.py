@@ -1,7 +1,24 @@
 from django.utils import timezone
 
 from .models import CloudResource, InventorySync
+from .notifications import notify
 from .providers import ProviderDiscoveryError, get_provider
+
+
+def _notify_sync_issue(account, sync):
+    if sync.status not in {InventorySync.Status.FAILED, InventorySync.Status.PARTIAL}:
+        return
+    notify(
+        account.organization,
+        dedupe_key=f"inventory-sync:{account.id}:{sync.status}",
+        category="operations",
+        severity="critical" if sync.status == InventorySync.Status.FAILED else "high",
+        title=f"Inventory sync {sync.status} for {account.name}",
+        detail=(sync.errors[0] if sync.errors else "Inventory sync completed with provider errors."),
+        target="Accounts",
+        object_type="cloud_account",
+        object_id=str(account.id),
+    )
 
 
 def sync_inventory(account) -> InventorySync:
@@ -24,6 +41,7 @@ def sync_inventory(account) -> InventorySync:
         sync.completed_at = timezone.now()
         sync.errors = [str(exc)[:255]]
         sync.save(update_fields=["status", "completed_at", "errors"])
+        _notify_sync_issue(account, sync)
         return sync
 
     seen_at = timezone.now()
@@ -83,4 +101,5 @@ def sync_inventory(account) -> InventorySync:
             "errors",
         ]
     )
+    _notify_sync_issue(account, sync)
     return sync
