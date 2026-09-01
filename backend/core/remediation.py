@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from .audit import record_audit
 from .automation_models import RemediationAction, RemediationEvent
+from .notifications import notify
 from .providers.aws import AWSProvider
 
 ACTION_ADD_TAGS = "aws.add_tags"
@@ -39,6 +40,20 @@ def _event(action, event_type, actor=None, metadata=None):
         event_type=event_type,
         actor=actor if getattr(actor, "is_authenticated", False) else None,
         metadata=metadata or {},
+    )
+
+
+def _notify_remediation(action, *, state, severity, title, detail):
+    return notify(
+        action.cloud_account.organization,
+        dedupe_key=f"remediation:{action.id}:{state}",
+        category="remediation",
+        severity=severity,
+        title=title,
+        detail=detail,
+        target="Automation",
+        object_type="remediation_action",
+        object_id=str(action.id),
     )
 
 
@@ -111,6 +126,13 @@ def preview_action(action, actor=None):
     action.save(update_fields=["preview", "evidence_fingerprint", "status", "error", "updated_at"])
     _event(action, "previewed", actor, {"fingerprint": fingerprint, "changes": changed})
     record_audit(actor, "remediation.preview", action, {"simulation": action.simulation})
+    _notify_remediation(
+        action,
+        state="approval",
+        severity="warning",
+        title=f"Remediation approval required: {action.resource.name or action.resource.provider_resource_id}",
+        detail="A remediation preview is ready and requires an administrator decision before execution.",
+    )
     return action
 
 
@@ -189,6 +211,13 @@ def execute_action(action, actor):
             {"expected": action.evidence_fingerprint, "current": current_fingerprint},
         )
         record_audit(actor, "remediation.stale", action)
+        _notify_remediation(
+            action,
+            state="stale",
+            severity="high",
+            title=f"Remediation needs a new preview: {action.resource.name or action.resource.provider_resource_id}",
+            detail=action.error,
+        )
         raise StaleEvidenceError(action.error)
 
     tags = _validate_parameters(action)["tags"]
@@ -217,6 +246,17 @@ def execute_action(action, actor):
         )
         _event(action, "executed", actor, result)
         record_audit(actor, "remediation.execute", action, result)
+        _notify_remediation(
+            action,
+            state="succeeded",
+            severity="info",
+            title=f"Remediation succeeded: {action.resource.name or action.resource.provider_resource_id}",
+            detail=(
+                "Remediation simulation completed successfully; no provider mutation was made."
+                if action.simulation
+                else "The approved remediation completed successfully."
+            ),
+        )
         return action
     except (ClientError, BotoCoreError, NoCredentialsError, KeyError, RemediationError) as exc:
         action.status = RemediationAction.Status.FAILED
@@ -226,4 +266,11 @@ def execute_action(action, actor):
         )
         _event(action, "failed", actor, {"error": action.error})
         record_audit(actor, "remediation.failed", action, {"error": action.error})
+        _notify_remediation(
+            action,
+            state="failed",
+            severity="critical",
+            title=f"Remediation failed: {action.resource.name or action.resource.provider_resource_id}",
+            detail=action.error,
+        )
         raise RemediationError(action.error) from exc
