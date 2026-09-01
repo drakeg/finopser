@@ -6,12 +6,14 @@ Turn existing governance, FinOps, billing, remediation, and operational signals 
 
 ## Foundation slice
 
-- Adds tenant-owned in-app notifications with severity, category, title/detail, action target, source object context, read/unread state, timestamps, occurrence counts, and deterministic deduplication keys.
+- Adds tenant-owned in-app notifications with severity, category, title/detail, action target, source object context, timestamps, occurrence counts, and deterministic deduplication keys.
 - Enforces one notification per organization + deduplication key so repeated source events coalesce instead of creating notification storms.
-- Repeated events refresh the notification, increment the occurrence count, and return it to unread state.
+- Read/unread state is stored per user through notification receipts; one teammate reading an alert never changes another teammate's unread state.
+- Repeated events refresh the notification, increment the occurrence count, clear existing user receipts, and return the alert to unread state for all users who can see it.
 - Adds a provider-neutral delivery boundary. External delivery is disabled by default through `NOTIFICATION_PROVIDER=disabled` behavior and requires no credentials or recurring spend.
 - Adds tenant-scoped APIs for listing/filtering notifications, unread count, mark read, mark unread, and mark all read.
-- Superusers deliberately receive global notification visibility; ordinary users are restricted to their organization.
+- Superusers deliberately receive global notification visibility, but their read receipts remain personal; ordinary users are restricted to their organization.
+- Notification read/unread state changes are recorded in the audit trail.
 - Billing lifecycle events create in-app attention notifications for past-due and canceled subscriptions after trusted webhook processing.
 
 ## Governance signal slice
@@ -67,5 +69,4 @@ No external notification SaaS, paid email provider, Slack activation, production
 ## Next slices
 
 - Add operational-console notification bell/count, recent alerts, filtering, and navigation to relevant sections.
-- Add audit coverage for notification state changes where appropriate.
 - Add optional disabled-by-default external adapters after in-app behavior is stable.

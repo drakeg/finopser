@@ -112,8 +112,6 @@ class Notification(models.Model):
     object_type = models.CharField(max_length=100, blank=True)
     object_id = models.CharField(max_length=100, blank=True)
     dedupe_key = models.CharField(max_length=255)
-    is_read = models.BooleanField(default=False, db_index=True)
-    read_at = models.DateTimeField(null=True, blank=True)
     first_seen = models.DateTimeField(auto_now_add=True)
     last_seen = models.DateTimeField(auto_now=True)
     occurrence_count = models.PositiveIntegerField(default=1)
@@ -129,6 +127,31 @@ class Notification(models.Model):
 
     def __str__(self) -> str:
         return f"{self.organization}: {self.title}"
+
+
+class NotificationReceipt(models.Model):
+    notification = models.ForeignKey(
+        Notification,
+        on_delete=models.CASCADE,
+        related_name="receipts",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="notification_receipts",
+    )
+    read_at = models.DateTimeField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["notification", "user"],
+                name="uniq_notification_user_receipt",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user}: {self.notification_id} read"
 
 
 class OnboardingProfile(models.Model):
