@@ -7,6 +7,7 @@ from django.utils import timezone
 from .audit import record_audit
 from .entitlements import organization_scope_id
 from .models import Budget, BudgetAlert, CostRecord
+from .notifications import notify
 
 ZERO = Decimal("0")
 HUNDRED = Decimal("100")
@@ -63,6 +64,30 @@ def budget_snapshot(budget, today=None):
         "level": level,
         "has_data": has_data,
     }
+
+
+def _notify_budget_level(budget, snapshot):
+    if not budget.organization_id or snapshot["level"] == "ok":
+        return
+    severity = {
+        BudgetAlert.Level.WARNING: "warning",
+        BudgetAlert.Level.CRITICAL: "high",
+        BudgetAlert.Level.EXCEEDED: "critical",
+    }[snapshot["level"]]
+    notify(
+        budget.organization,
+        dedupe_key=f"budget:{budget.id}:{snapshot['period'].isoformat()}:{snapshot['level']}",
+        category="budget",
+        severity=severity,
+        title=f"Budget {snapshot['level']}: {budget.name}",
+        detail=(
+            f"{snapshot['utilization']}% used; "
+            f"{snapshot['actual']} {snapshot['currency']} of {budget.amount} {budget.currency}."
+        ),
+        target="Budgets",
+        object_type="Budget",
+        object_id=str(budget.id),
+    )
 
 
 def evaluate_budgets(actor=None, today=None):
@@ -126,6 +151,7 @@ def evaluate_budgets(actor=None, today=None):
                 alert.resolved_at = timezone.now()
                 alert.last_seen = timezone.now()
                 alert.save(update_fields=["status", "resolved_at", "last_seen"])
+        _notify_budget_level(budget, snapshot)
         snapshots.append((budget, snapshot))
 
     if actor is not None and snapshots:
