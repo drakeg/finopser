@@ -11,6 +11,7 @@ from .models import (
     ComplianceFramework,
     ComplianceRun,
 )
+from .notifications import notify
 
 FRAMEWORK_CODE = "FINOPSER-AWS-BASELINE"
 CONTROL_DEFINITIONS = [
@@ -176,6 +177,18 @@ def evaluate_compliance(actor=None):
     run.unknown_count = unknown
     run.resolved_count = resolved
     run.save()
+    if run.organization_id and failed:
+        notify(
+            run.organization,
+            dedupe_key="compliance:open-failures",
+            category="compliance",
+            severity="high",
+            title="Compliance findings need attention",
+            detail=f"Latest evaluation found {failed} failing checks; {resolved} were resolved.",
+            target="Compliance",
+            object_type="ComplianceRun",
+            object_id=str(run.id),
+        )
     if actor is not None:
         record_audit(
             actor,
