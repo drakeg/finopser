@@ -1,5 +1,5 @@
-from django.conf import settings
 import django.db.models.deletion
+from django.conf import settings
 from django.db import migrations, models
 
 
