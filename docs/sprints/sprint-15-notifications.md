@@ -40,6 +40,16 @@ Turn existing governance, FinOps, billing, remediation, and operational signals 
 - Inventory alerts target `Accounts`; cost alerts target `Costs`, with the affected cloud-account identifier included as action metadata.
 - Regression coverage verifies failed/partial generation, deduplication, severity, actionable target metadata, and quiet successful syncs.
 
+## Remediation lifecycle slice
+
+- A completed remediation preview emits a warning notification that an administrator decision is required.
+- Stale evidence emits a high-severity notification directing the operator back to `Automation` for a new preview and approval.
+- Failed execution emits a critical notification with bounded provider error context.
+- Successful execution emits an informational completion notification; simulation success explicitly states that no provider mutation occurred.
+- Remediation notifications are tenant-owned, target `Automation`, carry the remediation action identifier, and deduplicate by action plus lifecycle state.
+- Rejected actions stay quiet because they are deliberate operator decisions rather than conditions requiring additional attention.
+- Regression coverage verifies approval-required, stale, failed, and successful notification behavior without weakening the existing preview/approval/execution safety gates.
+
 ## API
 
 - `GET /api/notifications/`
@@ -56,7 +66,6 @@ No external notification SaaS, paid email provider, Slack activation, production
 
 ## Next slices
 
-- Generate notifications from remediation lifecycle through the notification service helper.
 - Add operational-console notification bell/count, recent alerts, filtering, and navigation to relevant sections.
 - Add audit coverage for notification state changes where appropriate.
 - Add optional disabled-by-default external adapters after in-app behavior is stable.
