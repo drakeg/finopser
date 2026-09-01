@@ -77,8 +77,6 @@ def notify(
         notification.object_type = object_type
         notification.object_id = object_id
         notification.occurrence_count += 1
-        notification.is_read = False
-        notification.read_at = None
         notification.save(
             update_fields=[
                 "category",
@@ -89,10 +87,9 @@ def notify(
                 "object_type",
                 "object_id",
                 "occurrence_count",
-                "is_read",
-                "read_at",
                 "last_seen",
             ]
         )
+        notification.receipts.all().delete()
     get_notification_delivery_provider().deliver(notification)
     return notification, created
