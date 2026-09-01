@@ -4,6 +4,7 @@ from django.contrib.auth.models import Group, User
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
+from .account_models import Notification
 from .automation_models import RemediationAction, RemediationEvent
 from .models import CloudAccount, CloudResource, Organization, OrganizationNode, Project
 from .rbac import CLOUD_ADMIN, FINOPS_ANALYST, PLATFORM_ADMIN
@@ -69,6 +70,13 @@ class RemediationWorkflowTests(APITestCase):
         self.assertEqual(action.status, RemediationAction.Status.PREVIEWED)
         self.assertFalse(action.preview["provider_mutation"])
         self.assertEqual(action.preview["changes"]["Owner"]["to"], "platform")
+        notification = Notification.objects.get(
+            organization=self.org,
+            dedupe_key=f"remediation:{action.id}:approval",
+        )
+        self.assertEqual(notification.severity, "warning")
+        self.assertEqual(notification.target, "Automation")
+        self.assertEqual(notification.object_id, str(action.id))
         boto_client.assert_not_called()
 
     @patch("core.providers.aws.boto3.client")
@@ -86,6 +94,12 @@ class RemediationWorkflowTests(APITestCase):
         self.assertEqual(action.status, RemediationAction.Status.SUCCEEDED)
         self.assertTrue(action.provider_result["simulation"])
         self.assertFalse(action.provider_result["mutated"])
+        notification = Notification.objects.get(
+            organization=self.org,
+            dedupe_key=f"remediation:{action.id}:succeeded",
+        )
+        self.assertEqual(notification.severity, "info")
+        self.assertIn("simulation", notification.detail.lower())
         boto_client.assert_not_called()
         self.assertTrue(RemediationEvent.objects.filter(action=action, event_type="approved").exists())
         self.assertTrue(RemediationEvent.objects.filter(action=action, event_type="executed").exists())
@@ -102,6 +116,12 @@ class RemediationWorkflowTests(APITestCase):
         action.refresh_from_db()
         self.assertEqual(action.status, RemediationAction.Status.STALE)
         self.assertIn("changed after preview", action.error)
+        notification = Notification.objects.get(
+            organization=self.org,
+            dedupe_key=f"remediation:{action.id}:stale",
+        )
+        self.assertEqual(notification.severity, "high")
+        self.assertEqual(notification.target, "Automation")
 
     @patch("core.remediation.AWSProvider._assumed_session")
     def test_real_ec2_tag_execution_uses_allowlisted_api(self, assumed_session):
@@ -126,6 +146,26 @@ class RemediationWorkflowTests(APITestCase):
         self.resource.refresh_from_db()
         self.assertEqual(action.status, RemediationAction.Status.SUCCEEDED)
         self.assertEqual(self.resource.tags["Owner"], "platform")
+
+    @patch("core.remediation.AWSProvider._assumed_session")
+    def test_provider_failure_generates_critical_notification(self, assumed_session):
+        session = MagicMock()
+        session.client.side_effect = KeyError("provider unavailable")
+        assumed_session.return_value = session
+        action = self.create_action(simulation=False)
+        self.client.post(f"/api/remediations/{action.id}/preview/")
+        self.client.force_authenticate(self.cloud_admin)
+        self.client.post(f"/api/remediations/{action.id}/approve/")
+
+        response = self.client.post(f"/api/remediations/{action.id}/execute/")
+
+        self.assertEqual(response.status_code, 400)
+        notification = Notification.objects.get(
+            organization=self.org,
+            dedupe_key=f"remediation:{action.id}:failed",
+        )
+        self.assertEqual(notification.severity, "critical")
+        self.assertIn("provider unavailable", notification.detail)
 
     def test_reserved_tag_keys_and_unsupported_resources_are_rejected_at_preview(self):
         self.client.force_authenticate(self.requester)
