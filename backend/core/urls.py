@@ -10,6 +10,7 @@ from . import (
     policy_api,
     recommendation_api,
     remediation_api,
+    report_api,
     views,
 )
 from .api import (
@@ -69,6 +70,8 @@ urlpatterns = [
     path("notifications/mark-all-read/", notification_api.mark_all_read, name="notification-mark-all-read"),
     path("notifications/<int:pk>/read/", notification_api.mark_read, name="notification-mark-read"),
     path("notifications/<int:pk>/unread/", notification_api.mark_unread, name="notification-mark-unread"),
+    path("reports/", report_api.catalog, name="report-catalog"),
+    path("reports/resource-inventory.csv", report_api.resource_inventory_csv, name="report-resource-inventory-csv"),
     path("account/bootstrap/", account_api.bootstrap, name="account-bootstrap"),
     path(
         "onboarding/organization/",
