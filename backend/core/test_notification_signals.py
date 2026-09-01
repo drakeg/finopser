@@ -18,6 +18,7 @@ from .models import (
     Project,
 )
 from .policies import evaluate_policies
+from .recommendations import generate_recommendations
 
 
 class NotificationSignalTests(TestCase):
@@ -113,3 +114,17 @@ class NotificationSignalTests(TestCase):
         self.assertEqual(notification.severity, "high")
         self.assertEqual(notification.occurrence_count, 2)
         self.assertEqual(Notification.objects.filter(category="policy").count(), 1)
+
+    def test_recommendation_generation_creates_actionable_coalesced_notification(self):
+        generate_recommendations(self.user, today=date(2026, 8, 20))
+        generate_recommendations(self.user, today=date(2026, 8, 20))
+
+        notification = Notification.objects.get(
+            organization=self.organization,
+            dedupe_key=f"recommendation:untagged-resource:{self.resource.id}",
+        )
+        self.assertEqual(notification.category, "recommendation")
+        self.assertEqual(notification.severity, "low")
+        self.assertEqual(notification.target, "Recommendations")
+        self.assertEqual(notification.object_type, "recommendation")
+        self.assertEqual(notification.occurrence_count, 2)
