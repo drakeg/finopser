@@ -3,6 +3,7 @@ from django.utils import timezone
 from .audit import record_audit
 from .entitlements import organization_scope_id
 from .models import CloudResource, GovernancePolicy, PolicyRun, PolicyViolation
+from .notifications import notify
 
 BUILTIN_POLICIES = [
     {
@@ -159,6 +160,18 @@ def evaluate_policies(actor=None):
     run.unknown_count = unknown
     run.resolved_count = resolved
     run.save()
+    if run.organization_id and violated:
+        notify(
+            run.organization,
+            dedupe_key="policy:open-violations",
+            category="policy",
+            severity="high",
+            title="Policy violations need attention",
+            detail=f"Latest evaluation found {violated} violations; {resolved} were resolved.",
+            target="Policies",
+            object_type="PolicyRun",
+            object_id=str(run.id),
+        )
     if actor is not None:
         record_audit(
             actor,
