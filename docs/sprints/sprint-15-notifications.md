@@ -12,7 +12,16 @@ Turn existing governance, FinOps, billing, remediation, and operational signals 
 - Adds a provider-neutral delivery boundary. External delivery is disabled by default through `NOTIFICATION_PROVIDER=disabled` behavior and requires no credentials or recurring spend.
 - Adds tenant-scoped APIs for listing/filtering notifications, unread count, mark read, mark unread, and mark all read.
 - Superusers deliberately receive global notification visibility; ordinary users are restricted to their organization.
-- Billing lifecycle events now create in-app attention notifications for past-due and canceled subscriptions after trusted webhook processing.
+- Billing lifecycle events create in-app attention notifications for past-due and canceled subscriptions after trusted webhook processing.
+
+## Governance signal slice
+
+- Budget evaluation emits tenant-owned warning/high/critical notifications for the current active threshold level.
+- Budget notifications deduplicate by organization, budget, period, and active level so repeated evaluation coalesces rather than creating new rows.
+- Compliance evaluation emits one coalesced high-severity notification per tenant while failing checks remain present.
+- Policy evaluation emits one coalesced high-severity notification per tenant while violations remain present.
+- Governance notifications carry console targets (`Budgets`, `Compliance`, `Policies`) and source object metadata for the upcoming UI navigation layer.
+- Regression tests cover source generation and repeated-event coalescing.
 
 ## API
 
@@ -22,7 +31,7 @@ Turn existing governance, FinOps, billing, remediation, and operational signals 
 - `POST /api/notifications/<id>/unread/`
 - `POST /api/notifications/mark-all-read/`
 
-List filters currently support `unread`, `category`, and `severity`.
+List filters support `unread`, `category`, and `severity`.
 
 ## Safety and cost gate
 
@@ -30,7 +39,7 @@ No external notification SaaS, paid email provider, Slack activation, production
 
 ## Next slices
 
-- Generate notifications from budgets, compliance findings, policy violations, recommendations, remediation lifecycle, and sync failures through the notification service helper.
+- Generate notifications from recommendations, remediation lifecycle, and inventory/cost sync failures through the notification service helper.
 - Add operational-console notification bell/count, recent alerts, filtering, and navigation to relevant sections.
 - Add audit coverage for notification state changes where appropriate.
 - Add optional disabled-by-default external adapters after in-app behavior is stable.
