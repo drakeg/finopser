@@ -4,6 +4,7 @@ from rest_framework.decorators import api_view, authentication_classes, permissi
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
+from .account_models import Notification, Subscription
 from .audit import record_audit
 from .billing import (
     BillingDisabled,
@@ -15,6 +16,7 @@ from .billing import (
     get_billing_provider,
 )
 from .entitlements import entitlement_payload, organization_subscription, user_organization
+from .notifications import notify
 
 
 def _subscription_for_user(user):
@@ -94,6 +96,33 @@ def portal(request):
     return Response({"url": session.url})
 
 
+def _notify_billing_attention(subscription: Subscription) -> None:
+    if subscription.status == Subscription.Status.PAST_DUE:
+        notify(
+            subscription.organization,
+            dedupe_key=f"billing:subscription:{subscription.id}:past-due",
+            category="billing",
+            severity=Notification.Severity.HIGH,
+            title="Subscription payment is past due",
+            detail="Billing needs attention. Paid capabilities remain available during the dunning grace period.",
+            target="Billing",
+            object_type="Subscription",
+            object_id=str(subscription.id),
+        )
+    elif subscription.status == Subscription.Status.CANCELED:
+        notify(
+            subscription.organization,
+            dedupe_key=f"billing:subscription:{subscription.id}:canceled",
+            category="billing",
+            severity=Notification.Severity.WARNING,
+            title="Subscription canceled",
+            detail="Your selected paid plan is retained for history, but effective capabilities now follow the Free plan.",
+            target="Billing",
+            object_type="Subscription",
+            object_id=str(subscription.id),
+        )
+
+
 @csrf_exempt
 @api_view(["POST"])
 @authentication_classes([])
@@ -130,6 +159,7 @@ def stripe_webhook(request):
                 "status": subscription.status,
             },
         )
+        _notify_billing_attention(subscription)
 
     return Response(
         {
