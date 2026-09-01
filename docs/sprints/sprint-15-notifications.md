@@ -23,6 +23,14 @@ Turn existing governance, FinOps, billing, remediation, and operational signals 
 - Governance notifications carry console targets (`Budgets`, `Compliance`, `Policies`) and source object metadata for the upcoming UI navigation layer.
 - Regression tests cover source generation and repeated-event coalescing.
 
+## Recommendation signal slice
+
+- Open recommendations emit tenant-owned in-app notifications through the shared notification service.
+- Recommendation notifications use the stable recommendation source key for deduplication, so repeated generation refreshes the existing alert instead of creating a notification storm.
+- Notification severity follows recommendation priority and the action target routes users to `Recommendations`.
+- Source metadata includes the recommendation object identifier for upcoming console navigation.
+- Regression coverage verifies repeated generation coalesces the notification and preserves actionable metadata.
+
 ## API
 
 - `GET /api/notifications/`
@@ -39,7 +47,7 @@ No external notification SaaS, paid email provider, Slack activation, production
 
 ## Next slices
 
-- Generate notifications from recommendations, remediation lifecycle, and inventory/cost sync failures through the notification service helper.
+- Generate notifications from remediation lifecycle and inventory/cost sync failures through the notification service helper.
 - Add operational-console notification bell/count, recent alerts, filtering, and navigation to relevant sections.
 - Add audit coverage for notification state changes where appropriate.
 - Add optional disabled-by-default external adapters after in-app behavior is stable.
