@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from . import (
     account_api,
+    audit_integrity_api,
     billing_api,
     budget_api,
     compliance_api,
@@ -70,6 +71,7 @@ urlpatterns = [
     path("notifications/mark-all-read/", notification_api.mark_all_read, name="notification-mark-all-read"),
     path("notifications/<int:pk>/read/", notification_api.mark_read, name="notification-mark-read"),
     path("notifications/<int:pk>/unread/", notification_api.mark_unread, name="notification-mark-unread"),
+    path("audit-integrity/", audit_integrity_api.integrity, name="audit-integrity"),
     path("reports/", report_api.catalog, name="report-catalog"),
     path("reports/resource-inventory.csv", report_api.resource_inventory_csv, name="report-resource-inventory-csv"),
     path("reports/cost-detail.csv", report_api.cost_detail_csv, name="report-cost-detail-csv"),
