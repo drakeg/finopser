@@ -73,6 +73,9 @@ urlpatterns = [
     path("reports/", report_api.catalog, name="report-catalog"),
     path("reports/resource-inventory.csv", report_api.resource_inventory_csv, name="report-resource-inventory-csv"),
     path("reports/cost-detail.csv", report_api.cost_detail_csv, name="report-cost-detail-csv"),
+    path("reports/compliance-findings.csv", report_api.compliance_findings_csv, name="report-compliance-findings-csv"),
+    path("reports/policy-violations.csv", report_api.policy_violations_csv, name="report-policy-violations-csv"),
+    path("reports/audit-events.csv", report_api.audit_events_csv, name="report-audit-events-csv"),
     path("account/bootstrap/", account_api.bootstrap, name="account-bootstrap"),
     path(
         "onboarding/organization/",
