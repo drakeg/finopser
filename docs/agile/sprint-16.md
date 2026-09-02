@@ -34,6 +34,14 @@ Turn persisted Finopser evidence into tenant-safe, useful reports and determinis
 - CSV columns are stable: usage date, account, provider account ID, project, service, region, amount, currency, and record update timestamp.
 - Financial exports use the shared audited report-export path and never invoke AWS Cost Explorer or another provider at report time.
 
+### Governance and audit reporting
+
+- Added deterministic CSV report families for compliance findings, policy violations, and application audit events.
+- Compliance and policy reports are hidden from the report catalog and denied at the endpoint when the tenant lacks the corresponding plan entitlement.
+- Governance exports remain tenant-scoped through cloud-account ownership and support account, status, and severity filters.
+- Audit exports are tenant-scoped through the audit event's direct organization ownership and support action/object-type filters.
+- Audit report rows intentionally omit metadata payloads so exports do not broaden exposure of potentially sensitive audit context.
+
 ## Safety and cost gate
 
 No paid BI platform, external dashboard SaaS, email delivery service, production AWS reporting resources, or recurring spend is authorized. Reports must operate from the existing application database in local/Docker deployments.
