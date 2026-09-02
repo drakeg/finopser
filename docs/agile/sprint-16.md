@@ -42,6 +42,16 @@ Turn persisted Finopser evidence into tenant-safe, useful reports and determinis
 - Audit exports are tenant-scoped through the audit event's direct organization ownership and support action/object-type filters.
 - Audit report rows intentionally omit metadata payloads so exports do not broaden exposure of potentially sensitive audit context.
 
+### Reports workspace
+
+- Replaced the static Reports placeholder with an interactive report workspace driven by `/api/reports/`.
+- The workspace only presents report definitions returned by the entitlement-filtered backend catalog.
+- Report cards expose resource inventory, cost detail, compliance findings, policy violations, and audit events when available to the current tenant.
+- Filter controls map directly to the bounded backend query parameters, including account/project, resource type, service, date range, status, severity, action, and object type.
+- CSV download actions call the existing authenticated export endpoints, preserving tenant scoping, audit logging, deterministic schemas, and the shared 5,000-row synchronous cap.
+- Reports no longer appear as `Planned` in the console navigation once the workspace module is loaded.
+- The current synchronous workspace intentionally does not add scheduled delivery or external report infrastructure; those remain explicit future extensions.
+
 ## Safety and cost gate
 
 No paid BI platform, external dashboard SaaS, email delivery service, production AWS reporting resources, or recurring spend is authorized. Reports must operate from the existing application database in local/Docker deployments.
