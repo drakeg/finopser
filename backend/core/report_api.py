@@ -17,6 +17,12 @@ from .reporting import (
     report_allowed,
     report_catalog,
 )
+from .reporting_actions import (
+    action_report_allowed,
+    action_report_catalog,
+    build_recommendations_report,
+    build_remediation_history_report,
+)
 
 
 def _optional_bool(value):
@@ -41,6 +47,11 @@ def _optional_date(value, field):
 
 def _require_report(request, code):
     if not report_allowed(request.user, code):
+        raise PermissionDenied("Upgrade your plan to access this report.")
+
+
+def _require_action_report(request, code):
+    if not action_report_allowed(request.user, code):
         raise PermissionDenied("Upgrade your plan to access this report.")
 
 
@@ -70,7 +81,7 @@ def _csv_response(request, result, filename):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def catalog(request):
-    return Response({"reports": report_catalog(request.user)})
+    return Response({"reports": report_catalog(request.user) + action_report_catalog(request.user)})
 
 
 @api_view(["GET"])
@@ -127,6 +138,33 @@ def policy_violations_csv(request):
         account_id=request.query_params.get("account"),
     )
     return _csv_response(request, result, "finopser-policy-violations.csv")
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def recommendations_csv(request):
+    _require_action_report(request, "recommendations")
+    result = build_recommendations_report(
+        request.user,
+        status=request.query_params.get("status"),
+        priority=request.query_params.get("priority"),
+        category=request.query_params.get("category"),
+        account_id=request.query_params.get("account"),
+    )
+    return _csv_response(request, result, "finopser-recommendations.csv")
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def remediation_history_csv(request):
+    _require_action_report(request, "remediation-history")
+    result = build_remediation_history_report(
+        request.user,
+        status=request.query_params.get("status"),
+        simulation=_optional_bool(request.query_params.get("simulation")),
+        account_id=request.query_params.get("account"),
+    )
+    return _csv_response(request, result, "finopser-remediation-history.csv")
 
 
 @api_view(["GET"])
