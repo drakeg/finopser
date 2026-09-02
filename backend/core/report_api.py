@@ -2,13 +2,21 @@ from datetime import date
 
 from django.http import HttpResponse
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .audit import record_audit
 from .entitlements import user_organization
-from .reporting import build_cost_detail_report, build_resource_inventory_report, report_catalog
+from .reporting import (
+    build_audit_events_report,
+    build_compliance_findings_report,
+    build_cost_detail_report,
+    build_policy_violations_report,
+    build_resource_inventory_report,
+    report_allowed,
+    report_catalog,
+)
 
 
 def _optional_bool(value):
@@ -29,6 +37,11 @@ def _optional_date(value, field):
         return date.fromisoformat(str(value))
     except ValueError as exc:
         raise ValidationError({field: "Use YYYY-MM-DD."}) from exc
+
+
+def _require_report(request, code):
+    if not report_allowed(request.user, code):
+        raise PermissionDenied("Upgrade your plan to access this report.")
 
 
 def _csv_response(request, result, filename):
@@ -57,7 +70,7 @@ def _csv_response(request, result, filename):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def catalog(request):
-    return Response({"reports": report_catalog()})
+    return Response({"reports": report_catalog(request.user)})
 
 
 @api_view(["GET"])
@@ -88,3 +101,40 @@ def cost_detail_csv(request):
         end_date=end_date,
     )
     return _csv_response(request, result, "finopser-cost-detail.csv")
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def compliance_findings_csv(request):
+    _require_report(request, "compliance-findings")
+    result = build_compliance_findings_report(
+        request.user,
+        status=request.query_params.get("status"),
+        severity=request.query_params.get("severity"),
+        account_id=request.query_params.get("account"),
+    )
+    return _csv_response(request, result, "finopser-compliance-findings.csv")
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def policy_violations_csv(request):
+    _require_report(request, "policy-violations")
+    result = build_policy_violations_report(
+        request.user,
+        status=request.query_params.get("status"),
+        severity=request.query_params.get("severity"),
+        account_id=request.query_params.get("account"),
+    )
+    return _csv_response(request, result, "finopser-policy-violations.csv")
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def audit_events_csv(request):
+    result = build_audit_events_report(
+        request.user,
+        action=request.query_params.get("action"),
+        object_type=request.query_params.get("object_type"),
+    )
+    return _csv_response(request, result, "finopser-audit-events.csv")
