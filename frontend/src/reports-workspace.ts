@@ -1,3 +1,5 @@
+import './reports-workspace.css'
+
 type ReportDefinition={code:string;name:string;description:string;format:string;target:string}
 type CatalogResponse={reports:ReportDefinition[]}
 type Account={id:number;name:string}
