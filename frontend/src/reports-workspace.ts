@@ -13,6 +13,8 @@ const endpointByCode:Record<string,string>={
   'cost-detail':'/api/reports/cost-detail.csv',
   'compliance-findings':'/api/reports/compliance-findings.csv',
   'policy-violations':'/api/reports/policy-violations.csv',
+  'recommendations':'/api/reports/recommendations.csv',
+  'remediation-history':'/api/reports/remediation-history.csv',
   'audit-events':'/api/reports/audit-events.csv',
 }
 
@@ -38,6 +40,17 @@ const filtersByCode:Record<string,FilterConfig[]>={
     {name:'account',label:'Account',type:'select'},
     {name:'status',label:'Status',type:'select',options:[{value:'',label:'All statuses'},{value:'open',label:'Open'},{value:'resolved',label:'Resolved'}]},
     {name:'severity',label:'Severity',type:'select',options:[{value:'',label:'All severities'},{value:'critical',label:'Critical'},{value:'high',label:'High'},{value:'medium',label:'Medium'},{value:'low',label:'Low'}]},
+  ],
+  'recommendations':[
+    {name:'account',label:'Account',type:'select'},
+    {name:'status',label:'Status',type:'select',options:[{value:'',label:'All statuses'},{value:'open',label:'Open'},{value:'dismissed',label:'Dismissed'},{value:'resolved',label:'Resolved'}]},
+    {name:'priority',label:'Priority',type:'select',options:[{value:'',label:'All priorities'},{value:'critical',label:'Critical'},{value:'high',label:'High'},{value:'medium',label:'Medium'},{value:'low',label:'Low'}]},
+    {name:'category',label:'Category',type:'select',options:[{value:'',label:'All categories'},{value:'cost',label:'Cost'},{value:'governance',label:'Governance'},{value:'operations',label:'Operations'}]},
+  ],
+  'remediation-history':[
+    {name:'account',label:'Account',type:'select'},
+    {name:'status',label:'Status',type:'select',options:[{value:'',label:'All statuses'},{value:'requested',label:'Requested'},{value:'previewed',label:'Previewed'},{value:'approved',label:'Approved'},{value:'succeeded',label:'Succeeded'},{value:'failed',label:'Failed'},{value:'stale',label:'Stale'},{value:'rejected',label:'Rejected'}]},
+    {name:'simulation',label:'Execution mode',type:'select',options:[{value:'',label:'All modes'},{value:'true',label:'Simulation'},{value:'false',label:'Live'}]},
   ],
   'audit-events':[
     {name:'action',label:'Action',type:'text'},
@@ -83,7 +96,7 @@ function renderWorkspace(section:HTMLElement){
   if(!selected){section.innerHTML='<h2>Reporting workspace</h2><div class="empty">No reports are available for your current plan.</div>';return}
   const cards=catalog.map(report=>`<button class="report-card ${report.code===selected.code?'selected':''}" data-report-code="${escapeHtml(report.code)}"><span class="report-target">${escapeHtml(report.target)}</span><strong>${escapeHtml(report.name)}</strong><small>${escapeHtml(report.description)}</small><b>CSV export →</b></button>`).join('')
   const filters=(filtersByCode[selected.code]??[]).map(renderFilter).join('')
-  section.innerHTML=`<div class="report-heading"><div><p class="eyebrow">PERSISTED EVIDENCE</p><h2>Reporting workspace</h2><p>Export tenant-scoped reports from evidence already stored in Finopser. Available reports reflect your current feature entitlements.</p></div><span class="report-count">${catalog.length} available</span></div><div class="report-layout"><div class="report-catalog">${cards}</div><div class="report-builder"><div class="report-builder-head"><div><span class="report-target">${escapeHtml(selected.target)}</span><h3>${escapeHtml(selected.name)}</h3><p>${escapeHtml(selected.description)}</p></div><span class="report-format">CSV</span></div><div class="report-filters">${filters||'<p class="report-no-filters">No filters are required for this report.</p>'}</div><div class="report-actions"><button class="primary-button" data-report-download>Download CSV</button><button class="ghost-button" data-report-clear>Clear filters</button></div><p class="report-note">Exports are generated synchronously from persisted tenant evidence and capped at 5,000 rows. Larger/background report jobs remain a future extension.</p></div></div>`
+  section.innerHTML=`<div class="report-heading"><div><p class="eyebrow">PERSISTED EVIDENCE</p><h2>Reporting workspace</h2><p>Export tenant-scoped reports from evidence already stored in Finopser. Available reports reflect your current feature entitlements.</p></div><span class="report-count">${catalog.length} available</span></div><div class="report-layout"><div class="report-catalog">${cards}</div><div class="report-builder"><div class="report-builder-head"><div><span class="report-target">${escapeHtml(selected.target)}</span><h3>${escapeHtml(selected.name)}</h3><p>${escapeHtml(selected.description)}</p></div><span class="report-format">CSV</span></div><div class="report-filters">${filters||'<p class="report-no-filters">No filters are required for this report.</p>'}</div><div class="report-actions"><button class="primary-button" data-report-download>Download CSV</button><button class="ghost-button" data-report-clear>Clear filters</button></div><p class="report-note">Exports are generated synchronously from persisted tenant evidence and capped at 5,000 rows. Generated timestamp, row count, and truncation state are returned with each export. Larger/background report jobs remain a future extension.</p></div></div>`
   section.querySelectorAll<HTMLButtonElement>('[data-report-code]').forEach(button=>button.addEventListener('click',()=>{selectedCode=button.dataset.reportCode??selectedCode;renderWorkspace(section)}))
   section.querySelector<HTMLButtonElement>('[data-report-clear]')?.addEventListener('click',()=>section.querySelectorAll<HTMLInputElement|HTMLSelectElement>('[data-report-filter]').forEach(control=>{control.value=''}))
   section.querySelector<HTMLButtonElement>('[data-report-download]')?.addEventListener('click',()=>downloadSelected(section,selected.code))
