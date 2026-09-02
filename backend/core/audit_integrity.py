@@ -92,15 +92,16 @@ def verify_latest_checkpoint(user) -> dict:
     expected_count = metadata.get("event_count")
     if through_event_id is None:
         events = scoped.none()
+        uncovered = scoped.exclude(id=checkpoint.id)
     else:
         events = scoped.filter(id__lte=through_event_id)
+        uncovered = scoped.filter(id__gt=through_event_id).exclude(id=checkpoint.id)
     actual_digest, actual_count, _ = calculate_digest(events)
     valid = (
         metadata.get("algorithm") == CHECKPOINT_ALGORITHM
         and expected_digest == actual_digest
         and expected_count == actual_count
     )
-    unchecked = scoped.filter(id__gt=checkpoint.id).count()
     return {
         "status": "valid" if valid else "invalid",
         "valid": valid,
@@ -108,5 +109,5 @@ def verify_latest_checkpoint(user) -> dict:
         "checkpoint_event_id": checkpoint.id,
         "through_event_id": through_event_id,
         "event_count": actual_count,
-        "unchecked_event_count": unchecked,
+        "unchecked_event_count": uncovered.count(),
     }
