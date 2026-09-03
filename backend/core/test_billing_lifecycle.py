@@ -2,14 +2,16 @@ import hashlib
 import hmac
 import json
 import time
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
 from .account_models import BillingEvent, OrganizationMembership, Subscription
+from .billing import apply_stripe_event
 from .entitlements import entitlement_payload
-from .models import Organization
+from .models import AuditEvent, Organization
 
 
 @override_settings(
@@ -76,6 +78,13 @@ class BillingLifecycleTests(TestCase):
         self.assertEqual(second.status_code, 200)
         self.assertFalse(second.json()["processed"])
         self.assertEqual(BillingEvent.objects.filter(event_id="evt_1").count(), 1)
+        audit = AuditEvent.objects.get(action="billing.customer.subscription.updated")
+        self.assertEqual(audit.organization, self.organization)
+        self.assertEqual(audit.metadata["provider_event_id"], "evt_1")
+        self.assertEqual(
+            AuditEvent.objects.filter(action="billing.customer.subscription.updated").count(),
+            1,
+        )
 
         self.subscription.refresh_from_db()
         self.assertEqual(self.subscription.plan, Subscription.Plan.PRO)
@@ -83,6 +92,23 @@ class BillingLifecycleTests(TestCase):
         self.assertEqual(self.subscription.billing_provider, "stripe")
         self.assertEqual(self.subscription.provider_customer_id, "cus_test_1")
         self.assertEqual(self.subscription.provider_subscription_id, "sub_test_1")
+
+    def test_audit_failure_rolls_back_billing_event_and_subscription(self):
+        with patch("core.billing.record_audit", side_effect=RuntimeError("audit unavailable")):
+            with self.assertRaises(RuntimeError):
+                apply_stripe_event(self._event(event_id="evt_atomic"))
+
+        self.assertFalse(BillingEvent.objects.filter(event_id="evt_atomic").exists())
+        self.assertFalse(
+            AuditEvent.objects.filter(
+                action="billing.customer.subscription.updated",
+                metadata__provider_event_id="evt_atomic",
+            ).exists()
+        )
+        self.subscription.refresh_from_db()
+        self.assertEqual(self.subscription.plan, Subscription.Plan.FREE)
+        self.assertEqual(self.subscription.status, Subscription.Status.FREE)
+        self.assertEqual(self.subscription.billing_provider, "")
 
     def test_invalid_signature_does_not_mutate_subscription(self):
         body = json.dumps(self._event()).encode()
