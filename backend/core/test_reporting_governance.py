@@ -171,3 +171,19 @@ class GovernanceReportingTests(TestCase):
         content = response.content.decode()
         self.assertIn("policy.evaluate", content)
         self.assertNotIn("secret.other.action", content)
+
+    def test_audit_export_exposes_checkpoint_context_without_metadata(self):
+        checkpoint = self.client.post("/api/audit-integrity/", {}, format="json")
+        self.assertEqual(checkpoint.status_code, 201)
+
+        response = self.client.get("/api/reports/audit-events.csv")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["X-Finopser-Audit-Integrity"], "valid")
+        self.assertEqual(response["X-Finopser-Audit-Algorithm"], "sha256")
+        self.assertEqual(response["X-Finopser-Audit-Unchecked-Events"], "0")
+        self.assertEqual(
+            response["X-Finopser-Audit-Checkpoint-Event"],
+            str(checkpoint.data["checkpoint_event_id"]),
+        )
+        self.assertNotIn("metadata", response.content.decode().splitlines()[0])
