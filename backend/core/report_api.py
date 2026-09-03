@@ -79,8 +79,7 @@ def _csv_response(request, result, filename):
     return response
 
 
-def _add_audit_integrity_headers(response, user):
-    integrity = verify_latest_checkpoint(user)
+def _add_audit_integrity_headers(response, integrity):
     response["X-Finopser-Audit-Integrity"] = integrity["status"]
     response["X-Finopser-Audit-Algorithm"] = integrity["algorithm"]
     response["X-Finopser-Audit-Covered-Events"] = str(integrity["event_count"])
@@ -183,10 +182,11 @@ def remediation_history_csv(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def audit_events_csv(request):
+    integrity = verify_latest_checkpoint(request.user)
     result = build_audit_events_report(
         request.user,
         action=request.query_params.get("action"),
         object_type=request.query_params.get("object_type"),
     )
     response = _csv_response(request, result, "finopser-audit-events.csv")
-    return _add_audit_integrity_headers(response, request.user)
+    return _add_audit_integrity_headers(response, integrity)
