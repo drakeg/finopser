@@ -13,6 +13,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .account_models import BillingEvent, Subscription
+from .audit import record_audit
 from .models import Organization
 
 
@@ -241,5 +242,16 @@ def apply_stripe_event(event: dict) -> tuple[BillingEvent, bool]:
                 "current_period_end",
                 "updated_at",
             ]
+        )
+        record_audit(
+            None,
+            f"billing.{event_type}",
+            subscription,
+            {
+                "provider": "stripe",
+                "provider_event_id": billing_event.event_id,
+                "plan": subscription.plan,
+                "status": subscription.status,
+            },
         )
         return billing_event, True
