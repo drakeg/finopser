@@ -5,7 +5,6 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from .account_models import Notification, Subscription
-from .audit import record_audit
 from .billing import (
     BillingDisabled,
     BillingError,
@@ -148,17 +147,6 @@ def stripe_webhook(request):
         "customer.subscription."
     ):
         subscription = organization_subscription(billing_event.organization)
-        record_audit(
-            None,
-            f"billing.{billing_event.event_type}",
-            subscription,
-            {
-                "provider": "stripe",
-                "provider_event_id": billing_event.event_id,
-                "plan": subscription.plan,
-                "status": subscription.status,
-            },
-        )
         _notify_billing_attention(subscription)
 
     return Response(
