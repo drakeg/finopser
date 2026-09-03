@@ -30,7 +30,7 @@ Finopser already provides tenant-owned `AuditEvent` records, read-only tenant-sc
 - Keep billing attention notifications outside the state/evidence transaction; notification delivery failure must not invalidate trusted subscription state or its audit evidence.
 - Preserve the existing test-mode-only Stripe safety gate and provider-neutral billing boundary.
 
-## Current slice — operational integrity visibility
+## Completed slice — operational integrity visibility
 
 - Enhance the existing Administration workspace rather than adding a new navigation surface.
 - Show the latest audit checkpoint status as verified, invalid, or unverified.
@@ -39,13 +39,24 @@ Finopser already provides tenant-owned `AuditEvent` records, read-only tenant-sc
 - Allow users to re-run verification without creating new evidence.
 - Keep the UI explicit that application-level checkpoints are tamper evidence and not independently anchored WORM storage.
 
-## Integrity semantics
+## Final slice — export integrity context
 
-A checkpoint proves that the application-visible audit rows covered by that checkpoint still match the canonical digest captured when the checkpoint was created. It is tamper-evident at the application/database-record level; it is not a substitute for independently anchored WORM storage because a database administrator with unrestricted write access could alter both evidence and checkpoint rows.
+- Snapshot the current tenant audit-integrity result before recording the export action itself.
+- Attach integrity status, algorithm, covered-event count, unchecked-event count, and checkpoint event identifier to audit CSV response headers.
+- Keep checkpoint metadata and arbitrary audit metadata out of CSV rows, preserving the existing narrow evidence-export surface.
+- Make the integrity context machine-readable without changing the stable audit CSV columns.
+
+## Integrity, retention, and recovery semantics
+
+A checkpoint proves that the application-visible audit rows covered by that checkpoint still match the canonical digest captured when the checkpoint was created. Existing/legacy audit rows require no rewrite: the first checkpoint deterministically covers the tenant history that already exists at checkpoint time.
+
+Audit events are append-only through supported product APIs and Django admin behavior. Sprint 17 does not introduce automatic deletion or a retention timer; operators remain responsible for database backup and retention policy appropriate to their deployment.
+
+An `invalid` checkpoint is evidence of a mismatch, not something Finopser silently repairs. Recovery should preserve the affected database state for investigation, compare against trusted backups or independently retained exports, restore only through an operator-controlled recovery process, and create a new checkpoint after the recovered history has been reviewed. Newer events after a valid checkpoint are reported as unchecked rather than being implied valid.
+
+Application-level checkpoints are tamper-evident, not independently anchored WORM evidence. A database administrator with unrestricted write access could alter both evidence and checkpoint rows. A future provider-neutral evidence sink can anchor checkpoint digests or exports to external WORM/SIEM/object-lock storage when an operator explicitly enables and funds that infrastructure.
 
 Trusted state transitions that require audit evidence should commit their authoritative state and audit record atomically where they share the same database transaction boundary. External or secondary delivery such as notifications remains best-effort and outside that authoritative transaction.
-
-Future Sprint 17 slices may add audit-export integrity/checkpoint context and external/WORM retention/recovery documentation.
 
 ## Safety / cost gate
 
@@ -57,8 +68,11 @@ No SIEM SaaS, CloudTrail Lake, S3 Object Lock resource, paid observability platf
 - Modified/deleted covered evidence produces an invalid result.
 - Newer uncovered evidence is reported explicitly rather than silently treated as verified.
 - Cross-tenant history is excluded from tenant checkpoint calculations.
+- Existing history can be checkpointed without destructive backfill or row rewriting.
 - Manager-only checkpoint creation preserves existing RBAC semantics.
 - Existing audit APIs/admin behavior remains read-only.
 - Representative trusted subscription state changes cannot commit without their corresponding audit evidence.
 - The operational console exposes integrity status and checkpoint creation without external dependencies.
+- Audit evidence exports expose bounded integrity context without broadening sensitive metadata.
+- Retention, recovery, and future independently anchored WORM/SIEM extension semantics are documented.
 - Backend/frontend/Docker CI remains green.
