@@ -7,6 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .audit import record_audit
+from .audit_integrity import verify_latest_checkpoint
 from .entitlements import user_organization
 from .reporting import (
     build_audit_events_report,
@@ -75,6 +76,18 @@ def _csv_response(request, result, filename):
     response["X-Finopser-Row-Count"] = str(result["row_count"])
     response["X-Finopser-Truncated"] = "true" if result["truncated"] else "false"
     response["X-Finopser-Generated-At"] = result["generated_at"].isoformat()
+    return response
+
+
+def _add_audit_integrity_headers(response, user):
+    integrity = verify_latest_checkpoint(user)
+    response["X-Finopser-Audit-Integrity"] = integrity["status"]
+    response["X-Finopser-Audit-Algorithm"] = integrity["algorithm"]
+    response["X-Finopser-Audit-Covered-Events"] = str(integrity["event_count"])
+    response["X-Finopser-Audit-Unchecked-Events"] = str(integrity["unchecked_event_count"])
+    checkpoint_id = integrity["checkpoint_event_id"]
+    if checkpoint_id is not None:
+        response["X-Finopser-Audit-Checkpoint-Event"] = str(checkpoint_id)
     return response
 
 
@@ -175,4 +188,5 @@ def audit_events_csv(request):
         action=request.query_params.get("action"),
         object_type=request.query_params.get("object_type"),
     )
-    return _csv_response(request, result, "finopser-audit-events.csv")
+    response = _csv_response(request, result, "finopser-audit-events.csv")
+    return _add_audit_integrity_headers(response, request.user)
