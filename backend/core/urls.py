@@ -13,6 +13,7 @@ from . import (
     recommendation_api,
     remediation_api,
     report_api,
+    vending_api,
     views,
 )
 from .api import (
@@ -64,6 +65,10 @@ urlpatterns = [
     path("auth/me/", views.me, name="me"),
     path("auth/sso/discover/", identity_api.discover, name="enterprise-identity-discover"),
     path("enterprise-identity/", identity_api.configuration, name="enterprise-identity-configuration"),
+    path("account-vending/requests/", vending_api.requests, name="account-vending-requests"),
+    path("account-vending/requests/<int:pk>/approve/", vending_api.approve, name="account-vending-approve"),
+    path("account-vending/requests/<int:pk>/reject/", vending_api.reject, name="account-vending-reject"),
+    path("account-vending/requests/<int:pk>/preview/", vending_api.preview, name="account-vending-preview"),
     path("plans/", account_api.plan_catalog, name="plan-catalog"),
     path("billing/status/", billing_api.billing_status, name="billing-status"),
     path("billing/checkout/", billing_api.checkout, name="billing-checkout"),
