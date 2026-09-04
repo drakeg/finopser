@@ -6,4 +6,9 @@ class CoreConfig(AppConfig):
     name = "core"
 
     def ready(self):
-        from . import account_models, automation_models, recommendation_models  # noqa: F401
+        from . import (  # noqa: F401
+            account_models,
+            automation_models,
+            recommendation_models,
+            vending_models,
+        )
