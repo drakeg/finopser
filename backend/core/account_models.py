@@ -185,3 +185,37 @@ class OnboardingProfile(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user}: {self.current_step}"
+
+
+class EnterpriseIdentityConfig(models.Model):
+    class Provider(models.TextChoices):
+        OIDC = "oidc", "OpenID Connect"
+        SAML = "saml", "SAML 2.0"
+
+    organization = models.OneToOneField(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="enterprise_identity",
+    )
+    enabled = models.BooleanField(default=False)
+    provider = models.CharField(max_length=16, choices=Provider.choices, default=Provider.OIDC)
+    email_domain = models.CharField(max_length=255, blank=True, db_index=True)
+    issuer_url = models.URLField(max_length=512, blank=True)
+    client_id = models.CharField(max_length=255, blank=True)
+    metadata_url = models.URLField(max_length=512, blank=True)
+    entity_id = models.CharField(max_length=512, blank=True)
+    secret_reference = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["email_domain"],
+                condition=~models.Q(email_domain=""),
+                name="uniq_enterprise_identity_email_domain",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.organization}: {self.provider} ({'enabled' if self.enabled else 'disabled'})"
