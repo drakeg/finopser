@@ -1,3 +1,4 @@
+# ruff: noqa: I001
 from django.db import IntegrityError, transaction
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
