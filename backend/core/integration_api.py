@@ -9,10 +9,14 @@ from rest_framework.decorators import api_view, authentication_classes, permissi
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from .api_auth import READ_ONLY_API_SCOPES
 from .audit import record_audit
 from .entitlements import user_organization
 from .integration_models import ApiCredential
 from .rbac import MANAGER_ROLES, user_has_role
+
+
+AVAILABLE_SCOPES = tuple(dict.fromkeys(scope for _prefix, scope in READ_ONLY_API_SCOPES))
 
 
 def _payload(credential: ApiCredential) -> dict:
@@ -20,6 +24,7 @@ def _payload(credential: ApiCredential) -> dict:
         "id": credential.id,
         "name": credential.name,
         "token_prefix": credential.token_prefix,
+        "scopes": credential.scopes,
         "is_active": credential.is_active,
         "last_used_at": credential.last_used_at,
         "created_at": credential.created_at,
@@ -32,6 +37,17 @@ def _manager_or_403(request):
     if not user_has_role(request.user, MANAGER_ROLES):
         return Response({"detail": "Manager access is required."}, status=403)
     return None
+
+
+def _validated_scopes(value) -> list[str] | None:
+    if value is None:
+        return ["accounts:read"]
+    if not isinstance(value, list) or not value:
+        return None
+    scopes = list(dict.fromkeys(str(scope).strip() for scope in value))
+    if any(not scope or scope not in AVAILABLE_SCOPES for scope in scopes):
+        return None
+    return scopes
 
 
 @api_view(["GET", "POST"])
@@ -54,6 +70,12 @@ def tokens(request):
         return Response({"detail": "A token name is required."}, status=400)
     if len(name) > 120:
         return Response({"detail": "Token name must be 120 characters or fewer."}, status=400)
+    scopes = _validated_scopes(request.data.get("scopes"))
+    if scopes is None:
+        return Response(
+            {"detail": "Scopes must be a non-empty list containing only supported read-only scopes."},
+            status=400,
+        )
     if ApiCredential.objects.filter(organization=organization, name=name).exists():
         return Response({"detail": "A token with that name already exists."}, status=status.HTTP_409_CONFLICT)
 
@@ -67,13 +89,14 @@ def tokens(request):
                 name=name,
                 token_prefix=prefix,
                 token_digest=digest,
+                scopes=scopes,
                 created_by=request.user,
             )
             record_audit(
                 request.user,
                 "api_credential.create",
                 credential,
-                {"name": credential.name, "token_prefix": credential.token_prefix},
+                {"name": credential.name, "token_prefix": credential.token_prefix, "scopes": scopes},
             )
     except IntegrityError:
         return Response({"detail": "Unable to issue a unique token. Try again."}, status=409)
@@ -109,6 +132,6 @@ def revoke_token(request, pk: int):
             request.user,
             "api_credential.revoke",
             credential,
-            {"name": credential.name, "token_prefix": credential.token_prefix},
+            {"name": credential.name, "token_prefix": credential.token_prefix, "scopes": credential.scopes},
         )
     return Response(_payload(credential))
