@@ -46,9 +46,12 @@ class ApiCredentialTests(TestCase):
         )
         self.client = APIClient()
 
-    def _issue_token(self, name="automation"):
+    def _issue_token(self, name="automation", scopes=None):
         self.client.force_authenticate(self.owner)
-        response = self.client.post("/api/integrations/tokens/", {"name": name}, format="json")
+        payload = {"name": name}
+        if scopes is not None:
+            payload["scopes"] = scopes
+        response = self.client.post("/api/integrations/tokens/", payload, format="json")
         self.assertEqual(response.status_code, 201)
         self.client.force_authenticate(user=None)
         return response
@@ -66,10 +69,12 @@ class ApiCredentialTests(TestCase):
         self.assertTrue(token.startswith(f"finopser_{credential.token_prefix}_"))
         self.assertEqual(credential.token_digest, hashlib.sha256(token.encode("utf-8")).hexdigest())
         self.assertNotEqual(credential.token_digest, token)
+        self.assertEqual(credential.scopes, ["accounts:read"])
         self.assertNotIn("token_digest", response.data)
         self.client.force_authenticate(self.owner)
         listing = self.client.get("/api/integrations/tokens/")
         self.assertEqual(listing.status_code, 200)
+        self.assertEqual(listing.data[0]["scopes"], ["accounts:read"])
         self.assertNotIn("token", listing.data[0])
         self.assertNotIn("token_digest", listing.data[0])
         self.assertTrue(
@@ -101,6 +106,39 @@ class ApiCredentialTests(TestCase):
         self.assertNotIn(self.other_account.id, ids)
         credential = ApiCredential.objects.get(organization=self.organization, name="automation")
         self.assertIsNotNone(credential.last_used_at)
+
+    def test_scope_limits_token_to_explicit_read_surface(self):
+        token = self._issue_token(scopes=["accounts:read"]).data["token"]
+        client = self._bearer_client(token)
+
+        self.assertEqual(client.get("/api/cloud-accounts/").status_code, 200)
+        self.assertEqual(client.get("/api/resources/").status_code, 401)
+
+    def test_multiple_scopes_allow_only_selected_surfaces(self):
+        token = self._issue_token(scopes=["accounts:read", "resources:read"]).data["token"]
+        client = self._bearer_client(token)
+
+        self.assertEqual(client.get("/api/cloud-accounts/").status_code, 200)
+        self.assertEqual(client.get("/api/resources/").status_code, 200)
+        self.assertEqual(client.get("/api/dashboard/").status_code, 401)
+
+    def test_unknown_or_empty_scopes_are_rejected(self):
+        self.client.force_authenticate(self.owner)
+
+        unknown = self.client.post(
+            "/api/integrations/tokens/",
+            {"name": "unknown", "scopes": ["remediation:write"]},
+            format="json",
+        )
+        empty = self.client.post(
+            "/api/integrations/tokens/",
+            {"name": "empty", "scopes": []},
+            format="json",
+        )
+
+        self.assertEqual(unknown.status_code, 400)
+        self.assertEqual(empty.status_code, 400)
+        self.assertFalse(ApiCredential.objects.filter(name__in=["unknown", "empty"]).exists())
 
     def test_api_token_is_rejected_for_mutation_and_unapproved_endpoints(self):
         token = self._issue_token().data["token"]
