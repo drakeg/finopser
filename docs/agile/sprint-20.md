@@ -21,6 +21,16 @@ Start E022 Public API / CLI / Integrations with tenant-bound machine authenticat
 - Require the issuing user to remain active and attached to the issuing workspace.
 - Scope downstream data using the same tenant ownership rules already used by the application.
 
+## Administration UI slice
+
+- Extend the existing Administration workspace with an API-token panel rather than creating a disconnected settings surface.
+- Allow workspace owners/administrators to issue named API tokens from the browser using the existing session/CSRF boundary.
+- Show the plaintext token in a prominent copy-now notice only after issuance; dismissing or leaving the current page state removes it from the UI.
+- List only safe token metadata: name, prefix, state, creator, created time, last-used time, and revoked time.
+- Require an explicit confirmation before revocation and refresh the list immediately after a successful revoke.
+- Show a manager-access message rather than exposing token metadata to non-manager users.
+- Keep the UI as a small Administration extension using the same modular mounting pattern as reporting and audit-integrity workspaces, avoiding unrelated dashboard changes.
+
 ## Initial read-only API surface
 
 Bearer tokens are accepted only for safe requests under these API prefixes:
@@ -82,8 +92,9 @@ No paid API gateway, hosted integration platform, webhook delivery SaaS, product
 
 ## Definition of done for this slice
 
-- Token plaintext is visible only in the creation response and is not persisted.
+- Token plaintext is visible only in the creation response/UI state and is not persisted.
 - Token administration is manager-only and tenant-scoped.
+- Managers can issue, inspect metadata for, copy once, and revoke tokens from Administration.
 - Valid Bearer tokens authenticate approved read-only endpoints and cannot cross workspace boundaries.
 - Unsafe methods and non-approved endpoints are rejected for API-token authentication.
 - Revoked tokens stop authenticating immediately.
