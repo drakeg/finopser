@@ -10,16 +10,21 @@ from .entitlements import user_organization
 from .integration_models import ApiCredential
 
 
-READ_ONLY_API_PREFIXES = (
-    "/api/dashboard/",
-    "/api/cloud-accounts/",
-    "/api/resources/",
-    "/api/costs/",
-    "/api/compliance/findings/",
-    "/api/policy-violations/",
-    "/api/recommendations/",
-    "/api/reports/",
+READ_ONLY_API_SCOPES = (
+    ("/api/dashboard/", "dashboard:read"),
+    ("/api/cloud-accounts/", "accounts:read"),
+    ("/api/resources/", "resources:read"),
+    ("/api/costs/", "costs:read"),
+    ("/api/compliance/findings/", "compliance:read"),
+    ("/api/policy-violations/", "policies:read"),
+    ("/api/recommendations/", "recommendations:read"),
+    ("/api/reports/", "reports:read"),
 )
+READ_ONLY_API_PREFIXES = tuple(prefix for prefix, _scope in READ_ONLY_API_SCOPES)
+
+
+def required_scope(path: str) -> str | None:
+    return next((scope for prefix, scope in READ_ONLY_API_SCOPES if path.startswith(prefix)), None)
 
 
 class ApiTokenAuthentication(authentication.BaseAuthentication):
@@ -35,7 +40,8 @@ class ApiTokenAuthentication(authentication.BaseAuthentication):
 
         if request.method not in SAFE_METHODS:
             raise AuthenticationFailed("API tokens are read-only.")
-        if not any(request.path.startswith(prefix) for prefix in READ_ONLY_API_PREFIXES):
+        scope = required_scope(request.path)
+        if scope is None:
             raise AuthenticationFailed("API token access is not enabled for this endpoint.")
 
         raw_token = parts[1].strip()
@@ -54,6 +60,8 @@ class ApiTokenAuthentication(authentication.BaseAuthentication):
         digest = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
         if not hmac.compare_digest(digest, credential.token_digest):
             raise AuthenticationFailed("Invalid API token.")
+        if scope not in credential.scopes:
+            raise AuthenticationFailed("API token does not have the required scope.")
 
         user = credential.created_by
         if not user.is_active or user_organization(user) != credential.organization:
