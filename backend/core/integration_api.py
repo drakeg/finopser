@@ -1,0 +1,114 @@
+import hashlib
+import secrets
+
+from django.db import IntegrityError, transaction
+from django.utils import timezone
+from rest_framework import status
+from rest_framework.authentication import BasicAuthentication, SessionAuthentication
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+from .audit import record_audit
+from .entitlements import user_organization
+from .integration_models import ApiCredential
+from .rbac import MANAGER_ROLES, user_has_role
+
+
+def _payload(credential: ApiCredential) -> dict:
+    return {
+        "id": credential.id,
+        "name": credential.name,
+        "token_prefix": credential.token_prefix,
+        "is_active": credential.is_active,
+        "last_used_at": credential.last_used_at,
+        "created_at": credential.created_at,
+        "revoked_at": credential.revoked_at,
+        "created_by": credential.created_by.get_username(),
+    }
+
+
+def _manager_or_403(request):
+    if not user_has_role(request.user, MANAGER_ROLES):
+        return Response({"detail": "Manager access is required."}, status=403)
+    return None
+
+
+@api_view(["GET", "POST"])
+@authentication_classes([SessionAuthentication, BasicAuthentication])
+@permission_classes([IsAuthenticated])
+def tokens(request):
+    denied = _manager_or_403(request)
+    if denied is not None:
+        return denied
+    organization = user_organization(request.user)
+    if organization is None:
+        return Response({"detail": "Complete organization setup first."}, status=400)
+
+    if request.method == "GET":
+        credentials = ApiCredential.objects.select_related("created_by").filter(organization=organization)
+        return Response([_payload(credential) for credential in credentials])
+
+    name = str(request.data.get("name", "")).strip()
+    if not name:
+        return Response({"detail": "A token name is required."}, status=400)
+    if len(name) > 120:
+        return Response({"detail": "Token name must be 120 characters or fewer."}, status=400)
+    if ApiCredential.objects.filter(organization=organization, name=name).exists():
+        return Response({"detail": "A token with that name already exists."}, status=status.HTTP_409_CONFLICT)
+
+    prefix = secrets.token_hex(6)
+    plaintext = f"finopser_{prefix}_{secrets.token_urlsafe(32)}"
+    digest = hashlib.sha256(plaintext.encode("utf-8")).hexdigest()
+    try:
+        with transaction.atomic():
+            credential = ApiCredential.objects.create(
+                organization=organization,
+                name=name,
+                token_prefix=prefix,
+                token_digest=digest,
+                created_by=request.user,
+            )
+            record_audit(
+                request.user,
+                "api_credential.create",
+                credential,
+                {"name": credential.name, "token_prefix": credential.token_prefix},
+            )
+    except IntegrityError:
+        return Response({"detail": "Unable to issue a unique token. Try again."}, status=409)
+
+    payload = _payload(credential)
+    payload["token"] = plaintext
+    payload["token_notice"] = "Copy this token now. Finopser does not store or display it again."
+    return Response(payload, status=status.HTTP_201_CREATED)
+
+
+@api_view(["POST"])
+@authentication_classes([SessionAuthentication, BasicAuthentication])
+@permission_classes([IsAuthenticated])
+def revoke_token(request, pk: int):
+    denied = _manager_or_403(request)
+    if denied is not None:
+        return denied
+    organization = user_organization(request.user)
+    credential = ApiCredential.objects.select_related("created_by").filter(
+        organization=organization,
+        pk=pk,
+    ).first()
+    if credential is None:
+        return Response({"detail": "API token not found."}, status=404)
+    if not credential.is_active:
+        return Response(_payload(credential))
+
+    with transaction.atomic():
+        credential.is_active = False
+        credential.revoked_at = timezone.now()
+        credential.save(update_fields=["is_active", "revoked_at"])
+        record_audit(
+            request.user,
+            "api_credential.revoke",
+            credential,
+            {"name": credential.name, "token_prefix": credential.token_prefix},
+        )
+    return Response(_payload(credential))
