@@ -9,6 +9,7 @@ class CoreConfig(AppConfig):
         from . import (  # noqa: F401
             account_models,
             automation_models,
+            integration_models,
             recommendation_models,
             vending_models,
         )
