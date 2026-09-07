@@ -2,7 +2,7 @@ import hashlib
 import hmac
 
 from django.utils import timezone
-from rest_framework.authentication import BaseAuthentication, get_authorization_header
+from rest_framework import authentication
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.permissions import SAFE_METHODS
 
@@ -22,11 +22,11 @@ READ_ONLY_API_PREFIXES = (
 )
 
 
-class ApiTokenAuthentication(BaseAuthentication):
+class ApiTokenAuthentication(authentication.BaseAuthentication):
     keyword = "Bearer"
 
     def authenticate(self, request):
-        authorization = get_authorization_header(request).decode("utf-8")
+        authorization = authentication.get_authorization_header(request).decode("utf-8")
         if not authorization:
             return None
         parts = authorization.split(None, 1)
