@@ -67,7 +67,11 @@ class ApiCredentialTests(TestCase):
         self.assertEqual(credential.token_digest, hashlib.sha256(token.encode("utf-8")).hexdigest())
         self.assertNotEqual(credential.token_digest, token)
         self.assertNotIn("token_digest", response.data)
-        self.assertNotIn("token", self.client.get("/api/integrations/tokens/").data[0])
+        self.client.force_authenticate(self.owner)
+        listing = self.client.get("/api/integrations/tokens/")
+        self.assertEqual(listing.status_code, 200)
+        self.assertNotIn("token", listing.data[0])
+        self.assertNotIn("token_digest", listing.data[0])
         self.assertTrue(
             AuditEvent.objects.filter(
                 organization=self.organization,
