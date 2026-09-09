@@ -4,9 +4,11 @@ from django.db import models
 from .models import Organization
 
 
-class ApiCredential(models.Model):
-    DEFAULT_SCOPES = ["accounts:read"]
+def default_api_credential_scopes():
+    return ["accounts:read"]
 
+
+class ApiCredential(models.Model):
     organization = models.ForeignKey(
         Organization,
         on_delete=models.CASCADE,
@@ -15,7 +17,7 @@ class ApiCredential(models.Model):
     name = models.CharField(max_length=120)
     token_prefix = models.CharField(max_length=24, unique=True)
     token_digest = models.CharField(max_length=64, unique=True)
-    scopes = models.JSONField(default=DEFAULT_SCOPES)
+    scopes = models.JSONField(default=default_api_credential_scopes)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
