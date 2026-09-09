@@ -1,3 +1,4 @@
+import core.integration_models
 from django.db import migrations, models
 
 
@@ -8,7 +9,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="apicredential",
             name="scopes",
-            field=models.JSONField(default=["accounts:read"]),
-            preserve_default=False,
+            field=models.JSONField(default=core.integration_models.default_api_credential_scopes),
         ),
     ]
