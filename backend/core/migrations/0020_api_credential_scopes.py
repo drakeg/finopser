@@ -1,5 +1,6 @@
-import core.integration_models
 from django.db import migrations, models
+
+import core.integration_models
 
 
 class Migration(migrations.Migration):
