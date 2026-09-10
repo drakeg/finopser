@@ -1,5 +1,6 @@
 import hashlib
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.test import TestCase
@@ -181,6 +182,98 @@ class ApiCredentialTests(TestCase):
         self.assertEqual(invalid.status_code, 400)
         self.assertEqual(past.status_code, 400)
         self.assertFalse(ApiCredential.objects.filter(name__in=["invalid-expiry", "past-expiry"]).exists())
+
+    def test_rotation_replaces_secret_immediately_and_preserves_policy(self):
+        expires_at = timezone.now() + timedelta(hours=2)
+        issued = self._issue_token(
+            scopes=["accounts:read", "resources:read"],
+            expires_at=expires_at.isoformat(),
+        )
+        old_token = issued.data["token"]
+        credential_id = issued.data["id"]
+        self.assertEqual(self._bearer_client(old_token).get("/api/cloud-accounts/").status_code, 200)
+
+        self.client.force_authenticate(self.owner)
+        rotated = self.client.post(f"/api/integrations/tokens/{credential_id}/rotate/", {}, format="json")
+        self.assertEqual(rotated.status_code, 200)
+        new_token = rotated.data["token"]
+        self.assertNotEqual(new_token, old_token)
+        self.assertNotIn("token_digest", rotated.data)
+        self.client.force_authenticate(user=None)
+
+        credential = ApiCredential.objects.get(pk=credential_id)
+        self.assertEqual(credential.scopes, ["accounts:read", "resources:read"])
+        self.assertEqual(credential.expires_at, expires_at)
+        self.assertEqual(credential.token_digest, hashlib.sha256(new_token.encode("utf-8")).hexdigest())
+        self.assertIsNone(credential.last_used_at)
+        self.assertEqual(self._bearer_client(old_token).get("/api/cloud-accounts/").status_code, 401)
+        self.assertEqual(self._bearer_client(new_token).get("/api/cloud-accounts/").status_code, 200)
+        self.assertTrue(
+            AuditEvent.objects.filter(
+                organization=self.organization,
+                action="api_credential.rotate",
+            ).exists()
+        )
+
+    def test_rotation_can_replace_expiration_without_changing_scopes(self):
+        issued = self._issue_token(scopes=["accounts:read"])
+        replacement_expiry = timezone.now() + timedelta(days=7)
+
+        self.client.force_authenticate(self.owner)
+        rotated = self.client.post(
+            f"/api/integrations/tokens/{issued.data['id']}/rotate/",
+            {"expires_at": replacement_expiry.isoformat()},
+            format="json",
+        )
+
+        self.assertEqual(rotated.status_code, 200)
+        credential = ApiCredential.objects.get(pk=issued.data["id"])
+        self.assertEqual(credential.expires_at, replacement_expiry)
+        self.assertEqual(credential.scopes, ["accounts:read"])
+
+    def test_non_manager_and_other_tenant_cannot_rotate_token(self):
+        issued = self._issue_token()
+        original_prefix = issued.data["token_prefix"]
+
+        self.client.force_authenticate(self.member)
+        member_response = self.client.post(f"/api/integrations/tokens/{issued.data['id']}/rotate/", {}, format="json")
+        self.assertEqual(member_response.status_code, 403)
+
+        self.client.force_authenticate(self.other_owner)
+        other_response = self.client.post(f"/api/integrations/tokens/{issued.data['id']}/rotate/", {}, format="json")
+        self.assertEqual(other_response.status_code, 404)
+
+        credential = ApiCredential.objects.get(pk=issued.data["id"])
+        self.assertEqual(credential.token_prefix, original_prefix)
+
+    def test_revoked_token_cannot_be_rotated(self):
+        issued = self._issue_token()
+        self.client.force_authenticate(self.owner)
+        self.assertEqual(
+            self.client.post(f"/api/integrations/tokens/{issued.data['id']}/revoke/").status_code,
+            200,
+        )
+
+        response = self.client.post(f"/api/integrations/tokens/{issued.data['id']}/rotate/", {}, format="json")
+
+        self.assertEqual(response.status_code, 409)
+
+    def test_rotation_rolls_back_if_audit_recording_fails(self):
+        issued = self._issue_token()
+        old_token = issued.data["token"]
+        credential = ApiCredential.objects.get(pk=issued.data["id"])
+        original_prefix = credential.token_prefix
+        original_digest = credential.token_digest
+
+        self.client.force_authenticate(self.owner)
+        with patch("core.integration_api.record_audit", side_effect=RuntimeError("audit unavailable")):
+            with self.assertRaises(RuntimeError):
+                self.client.post(f"/api/integrations/tokens/{issued.data['id']}/rotate/", {}, format="json")
+
+        credential.refresh_from_db()
+        self.assertEqual(credential.token_prefix, original_prefix)
+        self.assertEqual(credential.token_digest, original_digest)
+        self.assertEqual(self._bearer_client(old_token).get("/api/cloud-accounts/").status_code, 200)
 
     def test_api_token_is_rejected_for_mutation_and_unapproved_endpoints(self):
         token = self._issue_token().data["token"]
