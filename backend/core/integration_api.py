@@ -172,16 +172,11 @@ def rotate_token(request, pk: int):
             credential.token_prefix = prefix
             credential.token_digest = digest
             credential.last_used_at = None
+            update_fields = ["token_prefix", "token_digest", "last_used_at"]
             if expiration_supplied:
                 credential.expires_at = expires_at
-            credential.save(
-                update_fields=[
-                    "token_prefix",
-                    "token_digest",
-                    "last_used_at",
-                    *( ["expires_at"] if expiration_supplied else [] ),
-                ]
-            )
+                update_fields.append("expires_at")
+            credential.save(update_fields=update_fields)
             record_audit(
                 request.user,
                 "api_credential.rotate",
