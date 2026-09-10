@@ -67,6 +67,7 @@ urlpatterns = [
     path("auth/sso/discover/", identity_api.discover, name="enterprise-identity-discover"),
     path("enterprise-identity/", identity_api.configuration, name="enterprise-identity-configuration"),
     path("integrations/tokens/", integration_api.tokens, name="integration-tokens"),
+    path("integrations/tokens/<int:pk>/rotate/", integration_api.rotate_token, name="integration-token-rotate"),
     path("integrations/tokens/<int:pk>/revoke/", integration_api.revoke_token, name="integration-token-revoke"),
     path("account-vending/requests/", vending_api.requests, name="account-vending-requests"),
     path("account-vending/requests/<int:pk>/approve/", vending_api.approve, name="account-vending-approve"),
