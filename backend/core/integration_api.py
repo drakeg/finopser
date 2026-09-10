@@ -65,6 +65,13 @@ def _validated_expiration(value):
     return expires_at, None
 
 
+def _new_token_material():
+    prefix = secrets.token_hex(6)
+    plaintext = f"finopser_{prefix}_{secrets.token_urlsafe(32)}"
+    digest = hashlib.sha256(plaintext.encode("utf-8")).hexdigest()
+    return prefix, plaintext, digest
+
+
 @api_view(["GET", "POST"])
 @authentication_classes([SessionAuthentication, BasicAuthentication])
 @permission_classes([IsAuthenticated])
@@ -97,9 +104,7 @@ def tokens(request):
     if ApiCredential.objects.filter(organization=organization, name=name).exists():
         return Response({"detail": "A token with that name already exists."}, status=status.HTTP_409_CONFLICT)
 
-    prefix = secrets.token_hex(6)
-    plaintext = f"finopser_{prefix}_{secrets.token_urlsafe(32)}"
-    digest = hashlib.sha256(plaintext.encode("utf-8")).hexdigest()
+    prefix, plaintext, digest = _new_token_material()
     try:
         with transaction.atomic():
             credential = ApiCredential.objects.create(
@@ -129,6 +134,68 @@ def tokens(request):
     payload["token"] = plaintext
     payload["token_notice"] = "Copy this token now. Finopser does not store or display it again."
     return Response(payload, status=status.HTTP_201_CREATED)
+
+
+@api_view(["POST"])
+@authentication_classes([SessionAuthentication, BasicAuthentication])
+@permission_classes([IsAuthenticated])
+def rotate_token(request, pk: int):
+    denied = _manager_or_403(request)
+    if denied is not None:
+        return denied
+    organization = user_organization(request.user)
+    if organization is None:
+        return Response({"detail": "Complete organization setup first."}, status=400)
+
+    expiration_supplied = "expires_at" in request.data
+    expires_at = None
+    if expiration_supplied:
+        expires_at, expiration_error = _validated_expiration(request.data.get("expires_at"))
+        if expiration_error is not None:
+            return Response({"detail": expiration_error}, status=400)
+
+    prefix, plaintext, digest = _new_token_material()
+    try:
+        with transaction.atomic():
+            credential = (
+                ApiCredential.objects.select_for_update()
+                .select_related("created_by")
+                .filter(organization=organization, pk=pk)
+                .first()
+            )
+            if credential is None:
+                return Response({"detail": "API token not found."}, status=404)
+            if not credential.is_active:
+                return Response({"detail": "Revoked API tokens cannot be rotated."}, status=409)
+
+            previous_prefix = credential.token_prefix
+            credential.token_prefix = prefix
+            credential.token_digest = digest
+            credential.last_used_at = None
+            update_fields = ["token_prefix", "token_digest", "last_used_at"]
+            if expiration_supplied:
+                credential.expires_at = expires_at
+                update_fields.append("expires_at")
+            credential.save(update_fields=update_fields)
+            record_audit(
+                request.user,
+                "api_credential.rotate",
+                credential,
+                {
+                    "name": credential.name,
+                    "previous_token_prefix": previous_prefix,
+                    "token_prefix": credential.token_prefix,
+                    "scopes": credential.scopes,
+                    "expires_at": credential.expires_at.isoformat() if credential.expires_at is not None else None,
+                },
+            )
+    except IntegrityError:
+        return Response({"detail": "Unable to rotate to a unique token. Try again."}, status=409)
+
+    payload = _payload(credential)
+    payload["token"] = plaintext
+    payload["token_notice"] = "Copy this replacement token now. Finopser does not store or display it again."
+    return Response(payload)
 
 
 @api_view(["POST"])

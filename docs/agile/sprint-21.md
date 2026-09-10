@@ -37,15 +37,24 @@ Authentication rejects expired credentials before scope authorization or `last_u
 
 Existing credentials remain non-expiring because the migration adds a nullable expiration field without changing their active state.
 
+## Slice 3 — Atomic credential rotation
+
+Managers may rotate a tenant-owned active API credential with `POST /api/integrations/tokens/<id>/rotate/`. Rotation replaces the credential's token prefix and digest inside a database transaction, returns the replacement plaintext exactly once, resets `last_used_at`, and immediately invalidates the superseded secret.
+
+Scopes are preserved during rotation. Expiration is also preserved unless the manager explicitly supplies `expires_at`; an explicit blank value clears expiration, while a replacement date-time must pass the same future/timezone validation used during issuance. This allows an expired credential to be safely renewed without granting broader API access.
+
+The rotation audit event records the credential name, previous and replacement token prefixes, scopes, and resulting expiration. It never records the plaintext token or digest. If audit recording or the credential update fails, the database transaction rolls back so the previous secret remains valid instead of leaving the integration in a partially rotated state.
+
+Revoked credentials cannot be rotated. Tenant isolation and manager RBAC are enforced before credential mutation.
+
 ## Security boundary
 
-Scopes and expiration only narrow the existing Sprint 20 read-only API boundary. They cannot grant access to mutation endpoints, notification management, billing, identity configuration, account vending, remediation, or other control-plane operations.
+Scopes, expiration, and rotation only operate within the existing Sprint 20 read-only API boundary. They cannot grant access to mutation endpoints, notification management, billing, identity configuration, account vending, remediation, or other control-plane operations.
 
 Tenant binding, issuing-user membership checks, active/revoked lifecycle, one-time plaintext display, digest-only storage, and session-auth compatibility remain unchanged.
 
 ## Next slices
 
-- Atomic rotation with one-time replacement secret display and immediate superseded-token invalidation.
 - Administration UI scope selection, expiration, and rotation controls.
 - CLI packaging after the public API credential contract is stable.
 
