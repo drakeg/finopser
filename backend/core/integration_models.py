@@ -18,6 +18,7 @@ class ApiCredential(models.Model):
     token_prefix = models.CharField(max_length=24, unique=True)
     token_digest = models.CharField(max_length=64, unique=True)
     scopes = models.JSONField(default=default_api_credential_scopes)
+    expires_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
