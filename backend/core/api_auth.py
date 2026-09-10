@@ -60,6 +60,8 @@ class ApiTokenAuthentication(authentication.BaseAuthentication):
         digest = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
         if not hmac.compare_digest(digest, credential.token_digest):
             raise AuthenticationFailed("Invalid API token.")
+        if credential.expires_at is not None and credential.expires_at <= timezone.now():
+            raise AuthenticationFailed("API token has expired.")
         if scope not in credential.scopes:
             raise AuthenticationFailed("API token does not have the required scope.")
 
