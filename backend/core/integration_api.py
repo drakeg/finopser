@@ -3,6 +3,7 @@ import secrets
 
 from django.db import IntegrityError, transaction
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from rest_framework import status
 from rest_framework.authentication import BasicAuthentication, SessionAuthentication
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
@@ -28,6 +29,7 @@ def _payload(credential: ApiCredential) -> dict:
         "is_active": credential.is_active,
         "last_used_at": credential.last_used_at,
         "created_at": credential.created_at,
+        "expires_at": credential.expires_at,
         "revoked_at": credential.revoked_at,
         "created_by": credential.created_by.get_username(),
     }
@@ -48,6 +50,21 @@ def _validated_scopes(value) -> list[str] | None:
     if any(not scope or scope not in AVAILABLE_SCOPES for scope in scopes):
         return None
     return scopes
+
+
+def _validated_expiration(value):
+    if value in (None, ""):
+        return None, None
+    if not isinstance(value, str):
+        return None, "Expiration must be an ISO 8601 date-time string."
+    expires_at = parse_datetime(value.strip())
+    if expires_at is None:
+        return None, "Expiration must be an ISO 8601 date-time string."
+    if timezone.is_naive(expires_at):
+        expires_at = timezone.make_aware(expires_at, timezone.get_current_timezone())
+    if expires_at <= timezone.now():
+        return None, "Expiration must be in the future."
+    return expires_at, None
 
 
 @api_view(["GET", "POST"])
@@ -76,6 +93,9 @@ def tokens(request):
             {"detail": "Scopes must be a non-empty list containing only supported read-only scopes."},
             status=400,
         )
+    expires_at, expiration_error = _validated_expiration(request.data.get("expires_at"))
+    if expiration_error is not None:
+        return Response({"detail": expiration_error}, status=400)
     if ApiCredential.objects.filter(organization=organization, name=name).exists():
         return Response({"detail": "A token with that name already exists."}, status=status.HTTP_409_CONFLICT)
 
@@ -90,13 +110,19 @@ def tokens(request):
                 token_prefix=prefix,
                 token_digest=digest,
                 scopes=scopes,
+                expires_at=expires_at,
                 created_by=request.user,
             )
             record_audit(
                 request.user,
                 "api_credential.create",
                 credential,
-                {"name": credential.name, "token_prefix": credential.token_prefix, "scopes": scopes},
+                {
+                    "name": credential.name,
+                    "token_prefix": credential.token_prefix,
+                    "scopes": scopes,
+                    "expires_at": credential.expires_at.isoformat() if credential.expires_at else None,
+                },
             )
     except IntegrityError:
         return Response({"detail": "Unable to issue a unique token. Try again."}, status=409)
@@ -132,6 +158,11 @@ def revoke_token(request, pk: int):
             request.user,
             "api_credential.revoke",
             credential,
-            {"name": credential.name, "token_prefix": credential.token_prefix, "scopes": credential.scopes},
+            {
+                "name": credential.name,
+                "token_prefix": credential.token_prefix,
+                "scopes": credential.scopes,
+                "expires_at": credential.expires_at.isoformat() if credential.expires_at else None,
+            },
         )
     return Response(_payload(credential))
