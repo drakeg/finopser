@@ -60,6 +60,9 @@ class ApiTokenAuthentication(authentication.BaseAuthentication):
         digest = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
         if not hmac.compare_digest(digest, credential.token_digest):
             raise AuthenticationFailed("Invalid API token.")
+        now = timezone.now()
+        if credential.expires_at is not None and credential.expires_at <= now:
+            raise AuthenticationFailed("API token has expired.")
         if scope not in credential.scopes:
             raise AuthenticationFailed("API token does not have the required scope.")
 
@@ -67,7 +70,7 @@ class ApiTokenAuthentication(authentication.BaseAuthentication):
         if not user.is_active or user_organization(user) != credential.organization:
             raise AuthenticationFailed("API token owner no longer has access to this workspace.")
 
-        ApiCredential.objects.filter(pk=credential.pk).update(last_used_at=timezone.now())
+        ApiCredential.objects.filter(pk=credential.pk).update(last_used_at=now)
         return user, credential
 
     def authenticate_header(self, request):
