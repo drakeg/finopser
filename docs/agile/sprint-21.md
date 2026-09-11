@@ -47,16 +47,29 @@ The rotation audit event records the credential name, previous and replacement t
 
 Revoked credentials cannot be rotated. Tenant isolation and manager RBAC are enforced before credential mutation.
 
+## Slice 4 — Administration credential controls
+
+The Administration API-token workspace now exposes the Sprint 21 credential contract without exposing secrets after issuance:
+
+- Managers select one or more explicit read scopes when issuing a token; `accounts:read` is selected by default.
+- Managers may set an optional local expiration date/time. The browser converts it to an explicit UTC ISO 8601 timestamp before sending it to the API.
+- The credential table shows active, expired, and revoked states, granted scopes, expiration, creator, and last-use metadata.
+- Active credentials can be rotated from the UI with an explicit confirmation. The replacement secret is displayed exactly once using the same copy-now treatment as initial issuance.
+- Revocation remains explicit and immediate.
+- One-time token material is cleared when the user dismisses it or navigates away from Administration, so returning to the workspace does not re-display a previously issued secret.
+
+Rotation from the Administration workspace preserves the credential's current scopes and expiration. Expiration changes during rotation remain available through the API contract; richer rotation-expiration editing can be added without changing the security model.
+
 ## Security boundary
 
-Scopes, expiration, and rotation only operate within the existing Sprint 20 read-only API boundary. They cannot grant access to mutation endpoints, notification management, billing, identity configuration, account vending, remediation, or other control-plane operations.
+Scopes, expiration, rotation, and Administration controls only operate within the existing Sprint 20 read-only API boundary. They cannot grant access to mutation endpoints, notification management, billing, identity configuration, account vending, remediation, or other control-plane operations.
 
 Tenant binding, issuing-user membership checks, active/revoked lifecycle, one-time plaintext display, digest-only storage, and session-auth compatibility remain unchanged.
 
 ## Next slices
 
-- Administration UI scope selection, expiration, and rotation controls.
 - CLI packaging after the public API credential contract is stable.
+- Dedicated service principals and signed webhooks remain future work after the CLI boundary is established.
 
 ## Safety / cost gate
 
