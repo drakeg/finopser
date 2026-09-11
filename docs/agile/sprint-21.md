@@ -29,15 +29,24 @@ Existing Sprint 20 credentials are migrated to `accounts:read`; the migration do
 
 Token listing and audit metadata include scope names but never the token secret or stored digest.
 
+## Slice 2 — Optional credential expiration
+
+Managers may optionally set `expires_at` when issuing an API credential. The API accepts an ISO 8601 date-time value and rejects malformed values or timestamps that are not in the future. Omitting `expires_at` preserves the existing non-expiring behavior.
+
+Expiration metadata is tenant-scoped and is returned in safe credential metadata and audit context. Token secrets and stored digests remain excluded.
+
+Bearer authentication checks expiration after digest verification and before scope/tenant access is granted. Expired credentials return an authentication failure and do not update `last_used_at`.
+
+Existing credentials migrate with `expires_at = null`, so this slice does not unexpectedly disable existing automation.
+
 ## Security boundary
 
-Scopes only narrow the existing Sprint 20 read-only API boundary. They cannot grant access to mutation endpoints, notification management, billing, identity configuration, account vending, remediation, or other control-plane operations.
+Scopes and expiration only narrow the existing Sprint 20 read-only API boundary. They cannot grant access to mutation endpoints, notification management, billing, identity configuration, account vending, remediation, or other control-plane operations.
 
 Tenant binding, issuing-user membership checks, active/revoked lifecycle, one-time plaintext display, digest-only storage, and session-auth compatibility remain unchanged.
 
 ## Next slices
 
-- Optional credential expiration and authentication-time expiry enforcement.
 - Atomic rotation with one-time replacement secret display and immediate superseded-token invalidation.
 - Administration UI scope selection, expiration, and rotation controls.
 - CLI packaging after the public API credential contract is stable.
