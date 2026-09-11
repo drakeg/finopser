@@ -1,7 +1,9 @@
 import hashlib
+from datetime import timedelta
 
 from django.contrib.auth.models import User
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from .account_models import OrganizationMembership
@@ -46,11 +48,13 @@ class ApiCredentialTests(TestCase):
         )
         self.client = APIClient()
 
-    def _issue_token(self, name="automation", scopes=None):
+    def _issue_token(self, name="automation", scopes=None, expires_at=None):
         self.client.force_authenticate(self.owner)
         payload = {"name": name}
         if scopes is not None:
             payload["scopes"] = scopes
+        if expires_at is not None:
+            payload["expires_at"] = expires_at
         response = self.client.post("/api/integrations/tokens/", payload, format="json")
         self.assertEqual(response.status_code, 201)
         self.client.force_authenticate(user=None)
@@ -70,11 +74,13 @@ class ApiCredentialTests(TestCase):
         self.assertEqual(credential.token_digest, hashlib.sha256(token.encode("utf-8")).hexdigest())
         self.assertNotEqual(credential.token_digest, token)
         self.assertEqual(credential.scopes, ["accounts:read"])
+        self.assertIsNone(credential.expires_at)
         self.assertNotIn("token_digest", response.data)
         self.client.force_authenticate(self.owner)
         listing = self.client.get("/api/integrations/tokens/")
         self.assertEqual(listing.status_code, 200)
         self.assertEqual(listing.data[0]["scopes"], ["accounts:read"])
+        self.assertIsNone(listing.data[0]["expires_at"])
         self.assertNotIn("token", listing.data[0])
         self.assertNotIn("token_digest", listing.data[0])
         self.assertTrue(
@@ -139,6 +145,46 @@ class ApiCredentialTests(TestCase):
         self.assertEqual(unknown.status_code, 400)
         self.assertEqual(empty.status_code, 400)
         self.assertFalse(ApiCredential.objects.filter(name__in=["unknown", "empty"]).exists())
+
+    def test_future_expiration_is_persisted_and_returned(self):
+        expires_at = timezone.now() + timedelta(days=30)
+        response = self._issue_token(expires_at=expires_at.isoformat())
+        credential = ApiCredential.objects.get(pk=response.data["id"])
+
+        self.assertEqual(credential.expires_at, expires_at)
+        self.assertEqual(response.data["expires_at"], expires_at)
+
+    def test_invalid_or_past_expiration_is_rejected(self):
+        self.client.force_authenticate(self.owner)
+        invalid = self.client.post(
+            "/api/integrations/tokens/",
+            {"name": "invalid-expiration", "expires_at": "not-a-date"},
+            format="json",
+        )
+        past = self.client.post(
+            "/api/integrations/tokens/",
+            {"name": "past-expiration", "expires_at": (timezone.now() - timedelta(minutes=1)).isoformat()},
+            format="json",
+        )
+
+        self.assertEqual(invalid.status_code, 400)
+        self.assertEqual(past.status_code, 400)
+        self.assertFalse(
+            ApiCredential.objects.filter(name__in=["invalid-expiration", "past-expiration"]).exists()
+        )
+
+    def test_expired_token_is_rejected_without_updating_last_used(self):
+        issued = self._issue_token(expires_at=(timezone.now() + timedelta(days=1)).isoformat())
+        credential = ApiCredential.objects.get(pk=issued.data["id"])
+        credential.expires_at = timezone.now() - timedelta(seconds=1)
+        credential.last_used_at = None
+        credential.save(update_fields=["expires_at", "last_used_at"])
+
+        response = self._bearer_client(issued.data["token"]).get("/api/cloud-accounts/")
+
+        self.assertEqual(response.status_code, 401)
+        credential.refresh_from_db()
+        self.assertIsNone(credential.last_used_at)
 
     def test_api_token_is_rejected_for_mutation_and_unapproved_endpoints(self):
         token = self._issue_token().data["token"]
