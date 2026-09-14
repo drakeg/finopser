@@ -8,6 +8,7 @@ Continue E022 Public API / CLI / Integrations by separating non-human automation
 
 - #87 — Sprint 23: Service principals for read-only automation
 - #88 — Sprint 23 slice 1: Establish service-principal identity model
+- #90 — Sprint 23 slice 2: Service-principal lifecycle management
 
 ## Slice 1 — Identity foundation
 
@@ -25,11 +26,25 @@ Bearer authentication keeps the Sprint 20–22 safety contract:
 - deactivating the original human creator does not disable an otherwise active service principal;
 - existing human-owned API credentials remain backward compatible and still depend on their owner retaining workspace access.
 
+## Slice 2 — Lifecycle management
+
+Managers can now manage tenant-scoped non-human identities through the existing session-authenticated integration boundary:
+
+- `GET/POST /api/integrations/service-principals/` lists or creates principals;
+- `GET /api/integrations/service-principals/<id>/` returns a principal and its credential metadata;
+- `POST /api/integrations/service-principals/<id>/disable/` immediately blocks authentication;
+- `POST /api/integrations/service-principals/<id>/enable/` restores otherwise-valid credentials.
+
+Token creation accepts an optional `service_principal` id. The selected principal must be active and belong to the manager's organization. Credential responses expose principal identity metadata but never the stored digest or a previously issued plaintext secret.
+
+Disabling a principal does not silently revoke or delete its credentials. Credential state is preserved for audit/history and the authentication layer fails closed while the principal is disabled. Re-enabling restores credentials that remain active, unexpired, and correctly scoped. Rotation is blocked while the principal is disabled.
+
+Lifecycle create/disable/enable actions and service-bound credential changes use the existing audit boundary. Cross-tenant principal operations return not found rather than exposing another tenant's identity metadata.
+
 ## Planned next slices
 
-- Add manager-controlled service-principal lifecycle endpoints for create/list/inspect/disable.
-- Issue and rotate copy-once credentials bound to a selected service principal.
-- Add lifecycle audit events, UI management, documentation, and end-to-end acceptance coverage.
+- Add the service-principal management UI to the integration workspace.
+- Harden lifecycle audit/documentation and complete end-to-end Sprint 23 acceptance coverage.
 
 ## Safety / cost gate
 
