@@ -1,7 +1,7 @@
 import json
 from dataclasses import dataclass
 from urllib.error import HTTPError, URLError
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urlencode, urljoin, urlparse
 from urllib.request import Request, urlopen
 
 
@@ -22,8 +22,10 @@ class FinopserClient:
         if not self.token.strip():
             raise ValueError("A Finopser API token is required.")
 
-    def get(self, path: str):
+    def get(self, path: str, query: dict[str, str] | None = None):
         url = urljoin(self.base_url.rstrip("/") + "/", path.lstrip("/"))
+        if query:
+            url = f"{url}?{urlencode(query)}"
         request = Request(
             url,
             method="GET",
