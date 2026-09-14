@@ -1,6 +1,11 @@
 from django.urls import path
 
-from . import compliance_api, policy_api, recommendation_api, report_api
+from . import (
+    compliance_api,
+    policy_api,
+    recommendation_api,
+    report_api,
+)
 from .api import CloudAccountViewSet, CloudResourceViewSet
 from .cost_api import CostRecordViewSet
 from .dashboard_api import operational_dashboard
