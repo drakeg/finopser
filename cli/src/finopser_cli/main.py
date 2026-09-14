@@ -7,14 +7,14 @@ from .client import FinopserClient, FinopserClientError
 
 
 COMMAND_PATHS = {
-    "dashboard": "/api/dashboard/",
-    "accounts": "/api/cloud-accounts/",
-    "resources": "/api/resources/",
-    "costs": "/api/costs/",
-    "compliance": "/api/compliance/findings/",
-    "policy-violations": "/api/policy-violations/",
-    "recommendations": "/api/recommendations/",
-    "reports": "/api/reports/",
+    "dashboard": "/api/v1/dashboard/",
+    "accounts": "/api/v1/cloud-accounts/",
+    "resources": "/api/v1/resources/",
+    "costs": "/api/v1/costs/",
+    "compliance": "/api/v1/compliance/findings/",
+    "policy-violations": "/api/v1/policy-violations/",
+    "recommendations": "/api/v1/recommendations/",
+    "reports": "/api/v1/reports/",
 }
 
 COMMAND_FILTERS = {

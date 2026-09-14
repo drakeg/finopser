@@ -65,6 +65,21 @@ Dashboard, accounts, and reports remain unfiltered from the CLI because this sli
 
 This remains read-only presentation/query behavior. It does not expand token scopes or server permissions.
 
+## Slice 4 — Versioned public API contract
+
+Machine consumers now use the explicit `/api/v1/` namespace. The v1 surface contains only the eight approved Sprint 20–22 read-only collections/summaries used by the CLI and exposes those viewsets as GET-only routes.
+
+The existing unversioned `/api/` application routes remain available for browser/internal compatibility. Bearer-token scope resolution normalizes `/api/v1/` paths to the existing scope contract, so versioning does not grant any additional permission.
+
+The CLI now targets `/api/v1/` exclusively. An unknown future major version such as `/api/v2/` is not implicitly routed or authorized.
+
+Compatibility policy for v1:
+
+- backwards-compatible fields, filters, and endpoints may be added;
+- existing endpoint names, response fields, accepted filters, and required scopes are not removed or renamed in place;
+- a breaking machine-consumer change requires a new major API namespace rather than silently changing v1;
+- the v1 public namespace remains read-only even for session-authenticated callers.
+
 ## Local use
 
 From the repository root:
@@ -82,15 +97,16 @@ A credential must include the scope required by the requested endpoint. For exam
 
 ## Validation
 
-The CLI has network-free unit coverage for Bearer request construction, URL/token validation, HTTP/network error normalization, command-to-endpoint mapping, deterministic compact output, human-readable table formatting, paginated table rendering, nested-cell formatting, format conflict handling, URL-encoded query parameters, per-command filter validation, malformed-filter rejection, and non-zero failure behavior.
+The CLI has network-free unit coverage for Bearer request construction, URL/token validation, HTTP/network error normalization, command-to-endpoint mapping, deterministic compact output, human-readable table formatting, paginated table rendering, nested-cell formatting, format conflict handling, URL-encoded query parameters, per-command filter validation, malformed-filter rejection, versioned endpoint mapping, and non-zero failure behavior.
+
+Backend coverage verifies that v1 uses the existing token-scope contract, preserves tenant isolation, remains GET-only, leaves unversioned application routes available, and does not expose unknown future major versions.
 
 CI runs the CLI suite in a separate lightweight Python job without installing backend or frontend dependencies, preserving fast validation.
 
 ## Safety / cost gate
 
-The CLI contains no mutation/remediation commands, credential persistence, paid gateway integration, hosted integration service, production public exposure, recurring spend, or live cloud provisioning.
+The CLI and public v1 API contain no mutation/remediation commands, credential persistence, paid gateway integration, hosted integration service, production public exposure, recurring spend, or live cloud provisioning.
 
 ## Next slices
 
-- Define/version the public API contract and compatibility policy.
 - Add service-principal semantics after the CLI contract is stable.

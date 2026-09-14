@@ -21,10 +21,21 @@ READ_ONLY_API_SCOPES = (
     ("/api/reports/", "reports:read"),
 )
 READ_ONLY_API_PREFIXES = tuple(prefix for prefix, _scope in READ_ONLY_API_SCOPES)
+PUBLIC_API_VERSION_PREFIX = "/api/v1/"
+
+
+def canonical_api_path(path: str) -> str:
+    if path.startswith(PUBLIC_API_VERSION_PREFIX):
+        return f"/api/{path.removeprefix(PUBLIC_API_VERSION_PREFIX)}"
+    return path
 
 
 def required_scope(path: str) -> str | None:
-    return next((scope for prefix, scope in READ_ONLY_API_SCOPES if path.startswith(prefix)), None)
+    canonical_path = canonical_api_path(path)
+    return next(
+        (scope for prefix, scope in READ_ONLY_API_SCOPES if canonical_path.startswith(prefix)),
+        None,
+    )
 
 
 class ApiTokenAuthentication(authentication.BaseAuthentication):

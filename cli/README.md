@@ -19,6 +19,8 @@ export FINOPSER_TOKEN='<copy-once-token>'
 
 The equivalent `--url` and `--token` options are available when needed. The CLI does not persist either value.
 
+The CLI targets the stable `/api/v1/` read-only contract. Existing unversioned `/api/` routes remain available to the application for compatibility, but machine consumers should use the versioned surface.
+
 ## Commands
 
 ```text
@@ -77,3 +79,7 @@ finopser --format table resources
 List responses are rendered with stable alphabetic columns. Paginated responses render their `results` list. Object responses such as dashboard summaries render as `field | value` rows. Nested objects and lists are represented as compact deterministic JSON within a cell.
 
 `--compact` applies only to JSON output and cannot be combined with `--format table`.
+
+## API compatibility
+
+`/api/v1/` is the first stable machine-consumer contract. Backwards-compatible fields, filters, and endpoints may be added within v1. Removing or renaming an existing endpoint, field, accepted filter, or scope requirement is treated as a breaking change and requires a new major API version rather than silently changing v1.
