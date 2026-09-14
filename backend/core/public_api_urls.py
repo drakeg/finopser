@@ -1,9 +1,12 @@
 from django.urls import path
 
-from . import compliance_api, policy_api, recommendation_api, report_api
 from .api import CloudAccountViewSet, CloudResourceViewSet
+from .compliance_api import FindingViewSet
 from .cost_api import CostRecordViewSet
 from .dashboard_api import operational_dashboard
+from .policy_api import ViolationViewSet
+from .recommendation_api import RecommendationViewSet
+from .report_api import catalog
 
 
 urlpatterns = [
@@ -25,18 +28,18 @@ urlpatterns = [
     ),
     path(
         "compliance/findings/",
-        compliance_api.FindingViewSet.as_view({"get": "list"}),
+        FindingViewSet.as_view({"get": "list"}),
         name="public-v1-compliance-findings",
     ),
     path(
         "policy-violations/",
-        policy_api.ViolationViewSet.as_view({"get": "list"}),
+        ViolationViewSet.as_view({"get": "list"}),
         name="public-v1-policy-violations",
     ),
     path(
         "recommendations/",
-        recommendation_api.RecommendationViewSet.as_view({"get": "list"}),
+        RecommendationViewSet.as_view({"get": "list"}),
         name="public-v1-recommendations",
     ),
-    path("reports/", report_api.catalog, name="public-v1-reports"),
+    path("reports/", catalog, name="public-v1-reports"),
 ]
