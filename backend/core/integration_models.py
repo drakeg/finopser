@@ -8,11 +8,60 @@ def default_api_credential_scopes():
     return ["accounts:read"]
 
 
+class ServicePrincipal(models.Model):
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="service_principals",
+    )
+    name = models.CharField(max_length=120)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="created_service_principals",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    disabled_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["name", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "name"],
+                name="uniq_service_principal_org_name",
+            )
+        ]
+
+    @property
+    def is_authenticated(self) -> bool:
+        return True
+
+    @property
+    def is_superuser(self) -> bool:
+        return False
+
+    def get_username(self) -> str:
+        return f"service:{self.name}"
+
+    def __str__(self) -> str:
+        state = "active" if self.is_active else "disabled"
+        return f"{self.organization}: {self.name} ({state})"
+
+
 class ApiCredential(models.Model):
     organization = models.ForeignKey(
         Organization,
         on_delete=models.CASCADE,
         related_name="api_credentials",
+    )
+    service_principal = models.ForeignKey(
+        ServicePrincipal,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="credentials",
     )
     name = models.CharField(max_length=120)
     token_prefix = models.CharField(max_length=24, unique=True)

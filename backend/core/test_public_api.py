@@ -2,10 +2,11 @@ import hashlib
 
 from django.contrib.auth.models import User
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from .account_models import OrganizationMembership
-from .integration_models import ApiCredential
+from .integration_models import ApiCredential, ServicePrincipal
 from .models import CloudAccount, Organization
 
 
@@ -46,6 +47,28 @@ class VersionedPublicApiTests(TestCase):
         client.credentials(HTTP_AUTHORIZATION=f"Bearer {raw_token}")
         return client
 
+    def _service_principal_client(self, *, active=True):
+        principal = ServicePrincipal.objects.create(
+            organization=self.organization,
+            name="inventory-reader",
+            created_by=self.owner,
+            is_active=active,
+            disabled_at=None if active else timezone.now(),
+        )
+        raw_token = "finopser_servicev1_secret"
+        ApiCredential.objects.create(
+            organization=self.organization,
+            service_principal=principal,
+            name="service-v1-test",
+            token_prefix="servicev1",
+            token_digest=hashlib.sha256(raw_token.encode("utf-8")).hexdigest(),
+            scopes=["accounts:read"],
+            created_by=self.owner,
+        )
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Bearer {raw_token}")
+        return client, principal
+
     def test_versioned_accounts_surface_is_tenant_scoped(self):
         client = self._token_client(["accounts:read"])
 
@@ -80,3 +103,25 @@ class VersionedPublicApiTests(TestCase):
         client = self._token_client(["accounts:read"])
 
         self.assertEqual(client.get("/api/v2/cloud-accounts/").status_code, 404)
+
+    def test_service_principal_is_tenant_scoped_independently_of_creator(self):
+        client, principal = self._service_principal_client()
+        self.owner.is_active = False
+        self.owner.save(update_fields=["is_active"])
+
+        response = client.get("/api/v1/cloud-accounts/")
+
+        self.assertEqual(response.status_code, 200)
+        results = response.data if isinstance(response.data, list) else response.data["results"]
+        ids = {item["id"] for item in results}
+        self.assertIn(self.account.id, ids)
+        self.assertNotIn(self.other_account.id, ids)
+        self.assertEqual(principal.get_username(), "service:inventory-reader")
+
+    def test_disabled_service_principal_fails_closed(self):
+        client, _principal = self._service_principal_client(active=False)
+
+        response = client.get("/api/v1/cloud-accounts/")
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.data["detail"], "Service principal is disabled.")

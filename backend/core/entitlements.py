@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from .account_models import OnboardingProfile, OrganizationMembership, Subscription
+from .integration_models import ServicePrincipal
 from .models import CloudAccount
 
 
@@ -59,6 +60,8 @@ PAID_ACCESS_STATUSES = {
 def user_organization(user):
     if not user or not user.is_authenticated:
         return None
+    if isinstance(user, ServicePrincipal):
+        return user.organization
     membership = (
         OrganizationMembership.objects.select_related("organization")
         .filter(user=user)
@@ -72,6 +75,8 @@ def organization_scope_id(user):
     """Return an org id for self-service users, -1 before setup, or None for legacy/global users."""
     if not user or not user.is_authenticated:
         return -1
+    if isinstance(user, ServicePrincipal):
+        return user.organization_id
     if user.is_superuser:
         return None
     organization = user_organization(user)

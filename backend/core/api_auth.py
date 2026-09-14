@@ -61,7 +61,12 @@ class ApiTokenAuthentication(authentication.BaseAuthentication):
             raise AuthenticationFailed("Invalid API token.")
         prefix = token_parts[1]
         credential = (
-            ApiCredential.objects.select_related("created_by", "organization")
+            ApiCredential.objects.select_related(
+                "created_by",
+                "organization",
+                "service_principal",
+                "service_principal__organization",
+            )
             .filter(token_prefix=prefix, is_active=True)
             .first()
         )
@@ -76,12 +81,19 @@ class ApiTokenAuthentication(authentication.BaseAuthentication):
         if scope not in credential.scopes:
             raise AuthenticationFailed("API token does not have the required scope.")
 
-        user = credential.created_by
-        if not user.is_active or user_organization(user) != credential.organization:
-            raise AuthenticationFailed("API token owner no longer has access to this workspace.")
+        if credential.service_principal_id is not None:
+            principal = credential.service_principal
+            if principal.organization_id != credential.organization_id:
+                raise AuthenticationFailed("API token identity does not belong to this workspace.")
+            if not principal.is_active:
+                raise AuthenticationFailed("Service principal is disabled.")
+        else:
+            principal = credential.created_by
+            if not principal.is_active or user_organization(principal) != credential.organization:
+                raise AuthenticationFailed("API token owner no longer has access to this workspace.")
 
         ApiCredential.objects.filter(pk=credential.pk).update(last_used_at=timezone.now())
-        return user, credential
+        return principal, credential
 
     def authenticate_header(self, request):
         return self.keyword
