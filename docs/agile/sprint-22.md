@@ -49,6 +49,22 @@ The renderer is deliberately generic across the approved read-only surfaces:
 
 This slice changes presentation only. It does not add endpoints, scopes, persistence, mutation commands, or broader machine permissions.
 
+## Slice 3 — Stable server-side query filters
+
+The CLI now exposes repeatable `--filter NAME=VALUE` options only for API query parameters already implemented on approved read-only endpoints. Filter names are validated per command before a request is made, and values are URL-encoded by the standalone client.
+
+Supported filter contracts:
+
+- resources: `cloud_account`, `resource_type`, `region`, `state`
+- costs: `cloud_account`, `service`, `region`, `project`
+- compliance: `status`, `severity`, `cloud_account`, `control`
+- policy violations: `status`, `severity`, `cloud_account`, `policy`
+- recommendations: `status`, `category`, `priority`, `source_type`, `cloud_account`, `project`
+
+Dashboard, accounts, and reports remain unfiltered from the CLI because this slice does not invent or forward arbitrary query parameters. Unknown and malformed filters fail locally before any network request.
+
+This remains read-only presentation/query behavior. It does not expand token scopes or server permissions.
+
 ## Local use
 
 From the repository root:
@@ -59,13 +75,14 @@ export FINOPSER_URL=http://127.0.0.1:8000
 export FINOPSER_TOKEN='<copy-once-token>'
 finopser accounts
 finopser --format table accounts
+finopser resources --filter region=us-east-1 --filter state=running
 ```
 
 A credential must include the scope required by the requested endpoint. For example, `finopser accounts` requires `accounts:read`, while `finopser resources` requires `resources:read`.
 
 ## Validation
 
-The CLI has network-free unit coverage for Bearer request construction, URL/token validation, HTTP/network error normalization, command-to-endpoint mapping, deterministic compact output, human-readable table formatting, paginated table rendering, nested-cell formatting, format conflict handling, and non-zero failure behavior.
+The CLI has network-free unit coverage for Bearer request construction, URL/token validation, HTTP/network error normalization, command-to-endpoint mapping, deterministic compact output, human-readable table formatting, paginated table rendering, nested-cell formatting, format conflict handling, URL-encoded query parameters, per-command filter validation, malformed-filter rejection, and non-zero failure behavior.
 
 CI runs the CLI suite in a separate lightweight Python job without installing backend or frontend dependencies, preserving fast validation.
 
@@ -75,6 +92,5 @@ The CLI contains no mutation/remediation commands, credential persistence, paid 
 
 ## Next slices
 
-- Add pagination/query options where the API surfaces expose stable parameters.
 - Define/version the public API contract and compatibility policy.
 - Add service-principal semantics after the CLI contract is stable.
