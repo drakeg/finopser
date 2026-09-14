@@ -66,6 +66,26 @@ urlpatterns = [
     path("auth/me/", views.me, name="me"),
     path("auth/sso/discover/", identity_api.discover, name="enterprise-identity-discover"),
     path("enterprise-identity/", identity_api.configuration, name="enterprise-identity-configuration"),
+    path(
+        "integrations/service-principals/",
+        integration_api.service_principals,
+        name="integration-service-principals",
+    ),
+    path(
+        "integrations/service-principals/<int:pk>/",
+        integration_api.service_principal_detail,
+        name="integration-service-principal-detail",
+    ),
+    path(
+        "integrations/service-principals/<int:pk>/disable/",
+        integration_api.disable_service_principal,
+        name="integration-service-principal-disable",
+    ),
+    path(
+        "integrations/service-principals/<int:pk>/enable/",
+        integration_api.enable_service_principal,
+        name="integration-service-principal-enable",
+    ),
     path("integrations/tokens/", integration_api.tokens, name="integration-tokens"),
     path("integrations/tokens/<int:pk>/rotate/", integration_api.rotate_token, name="integration-token-rotate"),
     path("integrations/tokens/<int:pk>/revoke/", integration_api.revoke_token, name="integration-token-revoke"),
