@@ -34,8 +34,22 @@ finopser reports
 
 Each command requires the matching read scope on the token. All commands use HTTP GET and the CLI intentionally exposes no mutation or remediation operations.
 
-JSON is pretty-printed by default. Add `--compact` before the command for deterministic compact JSON suitable for scripts:
+## Output formats
+
+JSON remains the default and automation contract. It is pretty-printed unless `--compact` is supplied:
 
 ```bash
+finopser accounts
 finopser --compact accounts
 ```
+
+For interactive terminal use, request the dependency-free table renderer:
+
+```bash
+finopser --format table accounts
+finopser --format table resources
+```
+
+List responses are rendered with stable alphabetic columns. Paginated responses render their `results` list. Object responses such as dashboard summaries render as `field | value` rows. Nested objects and lists are represented as compact deterministic JSON within a cell.
+
+`--compact` applies only to JSON output and cannot be combined with `--format table`.
