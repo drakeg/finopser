@@ -4,13 +4,13 @@ import os
 import sys
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from urllib.error import HTTPError, URLError
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from finopser_cli.client import FinopserClient, FinopserClientError
-from finopser_cli.main import COMMAND_PATHS, run
+from finopser_cli.main import COMMAND_PATHS, render_table, run
 
 
 class ResponseStub:
@@ -99,6 +99,77 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         self.assertEqual(output.getvalue(), '{"a":1,"b":2}\n')
+
+    def test_table_output_renders_list_of_objects_with_stable_columns(self):
+        rendered = render_table(
+            [
+                {"name": "prod", "id": 2, "enabled": True},
+                {"name": "dev", "id": 1, "enabled": False},
+            ]
+        )
+
+        lines = rendered.splitlines()
+        self.assertEqual(lines[0], "enabled | id | name")
+        self.assertIn("true    | 2  | prod", rendered)
+        self.assertIn("false   | 1  | dev", rendered)
+
+    def test_table_output_uses_paginated_results_and_encodes_nested_values(self):
+        rendered = render_table(
+            {
+                "count": 1,
+                "results": [{"name": "acct", "tags": {"env": "prod"}}],
+            }
+        )
+
+        self.assertEqual(rendered.splitlines()[0], "name | tags")
+        self.assertIn('{"env":"prod"}', rendered)
+
+    def test_table_output_for_object_uses_field_value_rows(self):
+        rendered = render_table({"z": 3, "a": [1, 2]})
+
+        self.assertEqual(rendered.splitlines()[0], "field | value")
+        self.assertIn("a     | [1,2]", rendered)
+        self.assertIn("z     | 3", rendered)
+
+    def test_table_format_is_available_from_cli(self):
+        output = io.StringIO()
+        with patch("finopser_cli.main.FinopserClient") as client_type:
+            client_type.return_value.get.return_value = [{"id": 1, "name": "prod"}]
+            with redirect_stdout(output):
+                code = run(
+                    [
+                        "--url",
+                        "http://localhost:8000",
+                        "--token",
+                        "token",
+                        "--format",
+                        "table",
+                        "accounts",
+                    ]
+                )
+
+        self.assertEqual(code, 0)
+        self.assertIn("id | name", output.getvalue())
+        self.assertIn("1  | prod", output.getvalue())
+
+    def test_compact_and_table_formats_are_rejected_together(self):
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            code = run(
+                [
+                    "--url",
+                    "http://localhost:8000",
+                    "--token",
+                    "token",
+                    "--format",
+                    "table",
+                    "--compact",
+                    "accounts",
+                ]
+            )
+
+        self.assertEqual(code, 2)
+        self.assertIn("--compact can only be used with --format json", stderr.getvalue())
 
     def test_client_failure_returns_nonzero_and_stderr(self):
         stderr = io.StringIO()
