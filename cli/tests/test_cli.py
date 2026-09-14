@@ -10,7 +10,7 @@ from urllib.error import HTTPError, URLError
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from finopser_cli.client import FinopserClient, FinopserClientError
-from finopser_cli.main import COMMAND_PATHS, render_table, run
+from finopser_cli.main import COMMAND_FILTERS, COMMAND_PATHS, render_table, run
 
 
 class ResponseStub:
@@ -39,6 +39,19 @@ class FinopserClientTests(unittest.TestCase):
         self.assertEqual(request.get_method(), "GET")
         self.assertEqual(request.full_url, "http://localhost:8000/api/cloud-accounts/")
         self.assertEqual(request.get_header("Authorization"), "Bearer finopser_prefix_secret")
+
+    def test_client_encodes_query_parameters(self):
+        with patch("finopser_cli.client.urlopen", return_value=ResponseStub([])) as opener:
+            FinopserClient("http://localhost:8000", "token").get(
+                "/api/resources/",
+                {"region": "us-east-1", "resource_type": "AWS::EC2::Instance"},
+            )
+
+        request = opener.call_args.args[0]
+        self.assertEqual(
+            request.full_url,
+            "http://localhost:8000/api/resources/?region=us-east-1&resource_type=AWS%3A%3AEC2%3A%3AInstance",
+        )
 
     def test_client_rejects_invalid_url_and_empty_token(self):
         with self.assertRaises(ValueError):
@@ -80,6 +93,88 @@ class CliTests(unittest.TestCase):
                 "reports": "/api/reports/",
             },
         )
+
+    def test_filter_contract_matches_stable_server_side_filters(self):
+        self.assertEqual(
+            COMMAND_FILTERS,
+            {
+                "resources": ("cloud_account", "resource_type", "region", "state"),
+                "costs": ("cloud_account", "service", "region", "project"),
+                "compliance": ("status", "severity", "cloud_account", "control"),
+                "policy-violations": ("status", "severity", "cloud_account", "policy"),
+                "recommendations": (
+                    "status",
+                    "category",
+                    "priority",
+                    "source_type",
+                    "cloud_account",
+                    "project",
+                ),
+            },
+        )
+
+    def test_filters_are_forwarded_to_client(self):
+        with patch("finopser_cli.main.FinopserClient") as client_type:
+            client_type.return_value.get.return_value = []
+            code = run(
+                [
+                    "--url",
+                    "http://localhost:8000",
+                    "--token",
+                    "token",
+                    "resources",
+                    "--filter",
+                    "region=us-east-1",
+                    "--filter",
+                    "state=running",
+                ]
+            )
+
+        self.assertEqual(code, 0)
+        client_type.return_value.get.assert_called_once_with(
+            "/api/resources/",
+            query={"region": "us-east-1", "state": "running"},
+        )
+
+    def test_unsupported_filter_is_rejected_before_request(self):
+        stderr = io.StringIO()
+        with patch("finopser_cli.main.FinopserClient") as client_type:
+            with redirect_stderr(stderr):
+                code = run(
+                    [
+                        "--url",
+                        "http://localhost:8000",
+                        "--token",
+                        "token",
+                        "resources",
+                        "--filter",
+                        "service=EC2",
+                    ]
+                )
+
+        self.assertEqual(code, 1)
+        self.assertIn("Unsupported filter 'service' for resources", stderr.getvalue())
+        client_type.assert_not_called()
+
+    def test_malformed_filter_is_rejected_before_request(self):
+        stderr = io.StringIO()
+        with patch("finopser_cli.main.FinopserClient") as client_type:
+            with redirect_stderr(stderr):
+                code = run(
+                    [
+                        "--url",
+                        "http://localhost:8000",
+                        "--token",
+                        "token",
+                        "costs",
+                        "--filter",
+                        "region",
+                    ]
+                )
+
+        self.assertEqual(code, 1)
+        self.assertIn("Filters must use NAME=VALUE syntax", stderr.getvalue())
+        client_type.assert_not_called()
 
     def test_compact_output_is_deterministic_json(self):
         output = io.StringIO()
