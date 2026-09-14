@@ -17,6 +17,21 @@ COMMAND_PATHS = {
     "reports": "/api/reports/",
 }
 
+COMMAND_FILTERS = {
+    "resources": ("cloud_account", "resource_type", "region", "state"),
+    "costs": ("cloud_account", "service", "region", "project"),
+    "compliance": ("status", "severity", "cloud_account", "control"),
+    "policy-violations": ("status", "severity", "cloud_account", "policy"),
+    "recommendations": (
+        "status",
+        "category",
+        "priority",
+        "source_type",
+        "cloud_account",
+        "project",
+    ),
+}
+
 
 def _cell(value) -> str:
     if value is None:
@@ -61,6 +76,20 @@ def render_table(payload) -> str:
     return _grid(["value"], [[_cell(payload)]])
 
 
+def _parse_filters(command: str, values: list[str]) -> dict[str, str]:
+    allowed = set(COMMAND_FILTERS.get(command, ()))
+    parsed: dict[str, str] = {}
+    for value in values:
+        name, separator, filter_value = value.partition("=")
+        if not separator or not name or not filter_value:
+            raise ValueError("Filters must use NAME=VALUE syntax.")
+        if name not in allowed:
+            supported = ", ".join(sorted(allowed)) or "none"
+            raise ValueError(f"Unsupported filter '{name}' for {command}; supported filters: {supported}.")
+        parsed[name] = filter_value
+    return parsed
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="finopser", description="Read-only Finopser CLI")
     parser.add_argument(
@@ -86,7 +115,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
     for command in COMMAND_PATHS:
-        subparsers.add_parser(command, help=f"Read {command.replace('-', ' ')} data")
+        command_parser = subparsers.add_parser(command, help=f"Read {command.replace('-', ' ')} data")
+        if command in COMMAND_FILTERS:
+            command_parser.add_argument(
+                "--filter",
+                action="append",
+                default=[],
+                metavar="NAME=VALUE",
+                help="Repeatable server-side filter for this command",
+            )
     return parser
 
 
@@ -102,8 +139,9 @@ def run(argv: list[str] | None = None) -> int:
         return 2
 
     try:
+        query = _parse_filters(args.command, getattr(args, "filter", []))
         client = FinopserClient(args.url, args.token)
-        payload = client.get(COMMAND_PATHS[args.command])
+        payload = client.get(COMMAND_PATHS[args.command], query=query)
     except (ValueError, FinopserClientError) as exc:
         print(f"finopser: {exc}", file=sys.stderr)
         return 1
