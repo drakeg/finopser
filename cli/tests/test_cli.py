@@ -31,26 +31,26 @@ class FinopserClientTests(unittest.TestCase):
     def test_client_sends_bearer_token_to_read_only_endpoint(self):
         with patch("finopser_cli.client.urlopen", return_value=ResponseStub({"ok": True})) as opener:
             payload = FinopserClient("http://localhost:8000", "finopser_prefix_secret").get(
-                "/api/cloud-accounts/"
+                "/api/v1/cloud-accounts/"
             )
 
         self.assertEqual(payload, {"ok": True})
         request = opener.call_args.args[0]
         self.assertEqual(request.get_method(), "GET")
-        self.assertEqual(request.full_url, "http://localhost:8000/api/cloud-accounts/")
+        self.assertEqual(request.full_url, "http://localhost:8000/api/v1/cloud-accounts/")
         self.assertEqual(request.get_header("Authorization"), "Bearer finopser_prefix_secret")
 
     def test_client_encodes_query_parameters(self):
         with patch("finopser_cli.client.urlopen", return_value=ResponseStub([])) as opener:
             FinopserClient("http://localhost:8000", "token").get(
-                "/api/resources/",
+                "/api/v1/resources/",
                 {"region": "us-east-1", "resource_type": "AWS::EC2::Instance"},
             )
 
         request = opener.call_args.args[0]
         self.assertEqual(
             request.full_url,
-            "http://localhost:8000/api/resources/?region=us-east-1&resource_type=AWS%3A%3AEC2%3A%3AInstance",
+            "http://localhost:8000/api/v1/resources/?region=us-east-1&resource_type=AWS%3A%3AEC2%3A%3AInstance",
         )
 
     def test_client_rejects_invalid_url_and_empty_token(self):
@@ -61,7 +61,7 @@ class FinopserClientTests(unittest.TestCase):
 
     def test_http_error_uses_server_detail_without_token(self):
         error = HTTPError(
-            "http://localhost:8000/api/resources/",
+            "http://localhost:8000/api/v1/resources/",
             401,
             "Unauthorized",
             {},
@@ -69,13 +69,13 @@ class FinopserClientTests(unittest.TestCase):
         )
         with patch("finopser_cli.client.urlopen", side_effect=error):
             with self.assertRaisesRegex(FinopserClientError, "required scope") as raised:
-                FinopserClient("http://localhost:8000", "sensitive-token").get("/api/resources/")
+                FinopserClient("http://localhost:8000", "sensitive-token").get("/api/v1/resources/")
         self.assertNotIn("sensitive-token", str(raised.exception))
 
     def test_network_error_is_normalized(self):
         with patch("finopser_cli.client.urlopen", side_effect=URLError("connection refused")):
             with self.assertRaisesRegex(FinopserClientError, "Unable to reach Finopser"):
-                FinopserClient("http://localhost:8000", "token").get("/api/accounts/")
+                FinopserClient("http://localhost:8000", "token").get("/api/v1/accounts/")
 
 
 class CliTests(unittest.TestCase):
@@ -83,14 +83,14 @@ class CliTests(unittest.TestCase):
         self.assertEqual(
             COMMAND_PATHS,
             {
-                "dashboard": "/api/dashboard/",
-                "accounts": "/api/cloud-accounts/",
-                "resources": "/api/resources/",
-                "costs": "/api/costs/",
-                "compliance": "/api/compliance/findings/",
-                "policy-violations": "/api/policy-violations/",
-                "recommendations": "/api/recommendations/",
-                "reports": "/api/reports/",
+                "dashboard": "/api/v1/dashboard/",
+                "accounts": "/api/v1/cloud-accounts/",
+                "resources": "/api/v1/resources/",
+                "costs": "/api/v1/costs/",
+                "compliance": "/api/v1/compliance/findings/",
+                "policy-violations": "/api/v1/policy-violations/",
+                "recommendations": "/api/v1/recommendations/",
+                "reports": "/api/v1/reports/",
             },
         )
 
@@ -132,7 +132,7 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         client_type.return_value.get.assert_called_once_with(
-            "/api/resources/",
+            "/api/v1/resources/",
             query={"region": "us-east-1", "state": "running"},
         )
 
