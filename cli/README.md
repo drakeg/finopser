@@ -34,6 +34,30 @@ finopser reports
 
 Each command requires the matching read scope on the token. All commands use HTTP GET and the CLI intentionally exposes no mutation or remediation operations.
 
+## Server-side filters
+
+Commands backed by stable filtered API surfaces accept repeatable `--filter NAME=VALUE` options. The CLI validates filter names before sending a request rather than forwarding arbitrary query parameters.
+
+Examples:
+
+```bash
+finopser resources --filter region=us-east-1 --filter state=running
+finopser costs --filter service=EC2 --filter project=12
+finopser compliance --filter severity=high --filter status=open
+finopser policy-violations --filter severity=critical
+finopser recommendations --filter status=open --filter priority=high
+```
+
+Supported filter names are currently:
+
+- `resources`: `cloud_account`, `resource_type`, `region`, `state`
+- `costs`: `cloud_account`, `service`, `region`, `project`
+- `compliance`: `status`, `severity`, `cloud_account`, `control`
+- `policy-violations`: `status`, `severity`, `cloud_account`, `policy`
+- `recommendations`: `status`, `category`, `priority`, `source_type`, `cloud_account`, `project`
+
+Dashboard, accounts, and reports do not currently expose CLI filters. Filter values are URL-encoded by the client.
+
 ## Output formats
 
 JSON remains the default and automation contract. It is pretty-printed unless `--compact` is supplied:
