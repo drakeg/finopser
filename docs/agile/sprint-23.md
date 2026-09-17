@@ -9,12 +9,13 @@ Continue E022 Public API / CLI / Integrations by separating non-human automation
 - #87 — Sprint 23: Service principals for read-only automation
 - #88 — Sprint 23 slice 1: Establish service-principal identity model
 - #90 — Sprint 23 slice 2: Service-principal lifecycle management
+- #92 — Sprint 23 slice 3: Service-principal hardening and acceptance
 
 ## Slice 1 — Identity foundation
 
 A service principal is a tenant-bound, non-human identity used only for machine authentication. It has its own active/disabled lifecycle and does not borrow the runtime identity of the human administrator who created it.
 
-API credentials may now reference a service principal. The existing `created_by` relationship remains as immutable human provenance for governance and audit purposes, but it is not the runtime authorization identity of a service-bound credential.
+API credentials may reference a service principal. The existing `created_by` relationship remains as immutable human provenance for governance and audit purposes, but it is not the runtime authorization identity of a service-bound credential.
 
 Bearer authentication keeps the Sprint 20–22 safety contract:
 
@@ -28,7 +29,7 @@ Bearer authentication keeps the Sprint 20–22 safety contract:
 
 ## Slice 2 — Lifecycle management
 
-Managers can now manage tenant-scoped non-human identities through the existing session-authenticated integration boundary:
+Managers can manage tenant-scoped non-human identities through the existing session-authenticated integration boundary:
 
 - `GET/POST /api/integrations/service-principals/` lists or creates principals;
 - `GET /api/integrations/service-principals/<id>/` returns a principal and its credential metadata;
@@ -41,10 +42,27 @@ Disabling a principal does not silently revoke or delete its credentials. Creden
 
 Lifecycle create/disable/enable actions and service-bound credential changes use the existing audit boundary. Cross-tenant principal operations return not found rather than exposing another tenant's identity metadata.
 
-## Planned next slices
+## Slice 3 — Management UI and acceptance hardening
 
-- Add the service-principal management UI to the integration workspace.
-- Harden lifecycle audit/documentation and complete end-to-end Sprint 23 acceptance coverage.
+The Administration integration workspace now exposes service principals alongside API credentials. Managers can create a named principal with a purpose description, see active/disabled state, disable or re-enable it, and bind new read-only credentials to an active principal. Existing human-owned credential issuance remains available from the same form.
+
+Service-bound credentials identify their principal in the token table. A disabled principal is visibly reflected in credential state and rotation is unavailable until the principal is re-enabled. Issuance and rotation continue to use the copy-once secret panel; once dismissed or the workspace state is cleared, plaintext is not recoverable from Finopser.
+
+End-to-end acceptance coverage exercises the complete machine-identity lifecycle:
+
+1. create a service principal;
+2. issue a read-only credential bound to it;
+3. authenticate through `/api/v1/`;
+4. disable the principal and verify immediate rejection;
+5. re-enable it and verify authentication is restored;
+6. rotate the credential and verify the old secret is rejected while the replacement works;
+7. revoke the replacement and verify final rejection.
+
+The acceptance test also verifies that lifecycle and credential audit records carry service-principal identity where applicable while never recording either plaintext token. Focused lifecycle tests retain non-manager denial, tenant isolation, disabled-principal issuance/rotation denial, and backward compatibility for human-owned credentials.
+
+## Sprint 23 acceptance gate
+
+Sprint 23 is complete when slice #92 is merged with CI green. At that point the implementation provides tenant-bound non-human identities, manager-controlled lifecycle management, copy-once read-only credentials, fail-closed disable/revoke behavior, auditable lifecycle evidence, tenant isolation, management UI, and end-to-end acceptance coverage without expanding the authorized public API boundary.
 
 ## Safety / cost gate
 
