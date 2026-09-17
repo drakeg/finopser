@@ -90,3 +90,44 @@ class ApiCredential(models.Model):
     def __str__(self) -> str:
         state = "active" if self.is_active else "revoked"
         return f"{self.organization}: {self.name} ({state})"
+
+
+class IntegrationDestination(models.Model):
+    class DestinationType(models.TextChoices):
+        WEBHOOK = "webhook", "Webhook"
+
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="integration_destinations",
+    )
+    name = models.CharField(max_length=120)
+    destination_type = models.CharField(
+        max_length=32,
+        choices=DestinationType.choices,
+        default=DestinationType.WEBHOOK,
+    )
+    endpoint_url = models.URLField(max_length=500)
+    signing_secret_digest = models.CharField(max_length=64)
+    signing_secret_prefix = models.CharField(max_length=16)
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="created_integration_destinations",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    disabled_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["name", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "name"],
+                name="uniq_integration_destination_org_name",
+            )
+        ]
+
+    def __str__(self) -> str:
+        state = "active" if self.is_active else "disabled"
+        return f"{self.organization}: {self.name} ({self.destination_type}, {state})"
