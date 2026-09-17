@@ -9,6 +9,7 @@ from . import (
     compliance_api,
     identity_api,
     integration_api,
+    integration_destination_api,
     notification_api,
     policy_api,
     recommendation_api,
@@ -66,6 +67,10 @@ urlpatterns = [
     path("auth/me/", views.me, name="me"),
     path("auth/sso/discover/", identity_api.discover, name="enterprise-identity-discover"),
     path("enterprise-identity/", identity_api.configuration, name="enterprise-identity-configuration"),
+    path("integrations/destinations/", integration_destination_api.destinations, name="integration-destinations"),
+    path("integrations/destinations/<int:pk>/", integration_destination_api.destination_detail, name="integration-destination-detail"),
+    path("integrations/destinations/<int:pk>/disable/", integration_destination_api.disable_destination, name="integration-destination-disable"),
+    path("integrations/destinations/<int:pk>/enable/", integration_destination_api.enable_destination, name="integration-destination-enable"),
     path(
         "integrations/service-principals/",
         integration_api.service_principals,
