@@ -13,11 +13,23 @@ from rest_framework.response import Response
 from .api_auth import READ_ONLY_API_SCOPES
 from .audit import record_audit
 from .entitlements import user_organization
-from .integration_models import ApiCredential
+from .integration_models import ApiCredential, ServicePrincipal
 from .rbac import MANAGER_ROLES, user_has_role
 
 
 AVAILABLE_SCOPES = tuple(dict.fromkeys(scope for _prefix, scope in READ_ONLY_API_SCOPES))
+
+
+def _service_principal_payload(principal: ServicePrincipal) -> dict:
+    return {
+        "id": principal.id,
+        "name": principal.name,
+        "description": principal.description,
+        "is_active": principal.is_active,
+        "created_at": principal.created_at,
+        "disabled_at": principal.disabled_at,
+        "created_by": principal.created_by.get_username(),
+    }
 
 
 def _payload(credential: ApiCredential) -> dict:
@@ -32,6 +44,11 @@ def _payload(credential: ApiCredential) -> dict:
         "created_at": credential.created_at,
         "revoked_at": credential.revoked_at,
         "created_by": credential.created_by.get_username(),
+        "service_principal": (
+            _service_principal_payload(credential.service_principal)
+            if credential.service_principal is not None
+            else None
+        ),
     }
 
 
@@ -72,6 +89,132 @@ def _new_token_material():
     return prefix, plaintext, digest
 
 
+def _organization_or_400(request):
+    organization = user_organization(request.user)
+    if organization is None:
+        return None, Response({"detail": "Complete organization setup first."}, status=400)
+    return organization, None
+
+
+@api_view(["GET", "POST"])
+@authentication_classes([SessionAuthentication, BasicAuthentication])
+@permission_classes([IsAuthenticated])
+def service_principals(request):
+    denied = _manager_or_403(request)
+    if denied is not None:
+        return denied
+    organization, organization_error = _organization_or_400(request)
+    if organization_error is not None:
+        return organization_error
+
+    if request.method == "GET":
+        principals = ServicePrincipal.objects.select_related("created_by").filter(
+            organization=organization
+        )
+        return Response([_service_principal_payload(principal) for principal in principals])
+
+    name = str(request.data.get("name", "")).strip()
+    description = str(request.data.get("description", "")).strip()
+    if not name:
+        return Response({"detail": "A service principal name is required."}, status=400)
+    if len(name) > 120:
+        return Response({"detail": "Service principal name must be 120 characters or fewer."}, status=400)
+    if ServicePrincipal.objects.filter(organization=organization, name=name).exists():
+        return Response(
+            {"detail": "A service principal with that name already exists."},
+            status=status.HTTP_409_CONFLICT,
+        )
+
+    with transaction.atomic():
+        principal = ServicePrincipal.objects.create(
+            organization=organization,
+            name=name,
+            description=description,
+            created_by=request.user,
+        )
+        record_audit(
+            request.user,
+            "service_principal.create",
+            principal,
+            {"name": principal.name, "description": principal.description},
+        )
+    return Response(_service_principal_payload(principal), status=status.HTTP_201_CREATED)
+
+
+@api_view(["GET"])
+@authentication_classes([SessionAuthentication, BasicAuthentication])
+@permission_classes([IsAuthenticated])
+def service_principal_detail(request, pk: int):
+    denied = _manager_or_403(request)
+    if denied is not None:
+        return denied
+    organization, organization_error = _organization_or_400(request)
+    if organization_error is not None:
+        return organization_error
+
+    principal = ServicePrincipal.objects.select_related("created_by").filter(
+        organization=organization,
+        pk=pk,
+    ).first()
+    if principal is None:
+        return Response({"detail": "Service principal not found."}, status=404)
+    payload = _service_principal_payload(principal)
+    credentials = ApiCredential.objects.select_related("created_by", "service_principal").filter(
+        organization=organization,
+        service_principal=principal,
+    )
+    payload["credentials"] = [_payload(credential) for credential in credentials]
+    return Response(payload)
+
+
+def _set_service_principal_active(request, pk: int, *, is_active: bool):
+    denied = _manager_or_403(request)
+    if denied is not None:
+        return denied
+    organization, organization_error = _organization_or_400(request)
+    if organization_error is not None:
+        return organization_error
+
+    with transaction.atomic():
+        principal = (
+            ServicePrincipal.objects.select_for_update()
+            .select_related("created_by")
+            .filter(organization=organization, pk=pk)
+            .first()
+        )
+        if principal is None:
+            return Response({"detail": "Service principal not found."}, status=404)
+
+        if principal.is_active == is_active:
+            return Response(_service_principal_payload(principal))
+
+        principal.is_active = is_active
+        principal.disabled_at = None if is_active else timezone.now()
+        principal.save(update_fields=["is_active", "disabled_at"])
+        action = "service_principal.enable" if is_active else "service_principal.disable"
+        record_audit(
+            request.user,
+            action,
+            principal,
+            {"name": principal.name},
+        )
+    return Response(_service_principal_payload(principal))
+
+
+@api_view(["POST"])
+@authentication_classes([SessionAuthentication, BasicAuthentication])
+@permission_classes([IsAuthenticated])
+def disable_service_principal(request, pk: int):
+    return _set_service_principal_active(request, pk, is_active=False)
+
+
+@api_view(["POST"])
+@authentication_classes([SessionAuthentication, BasicAuthentication])
+@permission_classes([IsAuthenticated])
+def enable_service_principal(request, pk: int):
+    return _set_service_principal_active(request, pk, is_active=True)
+
+
 @api_view(["GET", "POST"])
 @authentication_classes([SessionAuthentication, BasicAuthentication])
 @permission_classes([IsAuthenticated])
@@ -79,12 +222,14 @@ def tokens(request):
     denied = _manager_or_403(request)
     if denied is not None:
         return denied
-    organization = user_organization(request.user)
-    if organization is None:
-        return Response({"detail": "Complete organization setup first."}, status=400)
+    organization, organization_error = _organization_or_400(request)
+    if organization_error is not None:
+        return organization_error
 
     if request.method == "GET":
-        credentials = ApiCredential.objects.select_related("created_by").filter(organization=organization)
+        credentials = ApiCredential.objects.select_related("created_by", "service_principal").filter(
+            organization=organization
+        )
         return Response([_payload(credential) for credential in credentials])
 
     name = str(request.data.get("name", "")).strip()
@@ -104,11 +249,24 @@ def tokens(request):
     if ApiCredential.objects.filter(organization=organization, name=name).exists():
         return Response({"detail": "A token with that name already exists."}, status=status.HTTP_409_CONFLICT)
 
+    service_principal = None
+    service_principal_id = request.data.get("service_principal")
+    if service_principal_id not in (None, ""):
+        service_principal = ServicePrincipal.objects.filter(
+            organization=organization,
+            pk=service_principal_id,
+        ).first()
+        if service_principal is None:
+            return Response({"detail": "Service principal not found."}, status=404)
+        if not service_principal.is_active:
+            return Response({"detail": "Disabled service principals cannot receive credentials."}, status=409)
+
     prefix, plaintext, digest = _new_token_material()
     try:
         with transaction.atomic():
             credential = ApiCredential.objects.create(
                 organization=organization,
+                service_principal=service_principal,
                 name=name,
                 token_prefix=prefix,
                 token_digest=digest,
@@ -125,6 +283,7 @@ def tokens(request):
                     "token_prefix": credential.token_prefix,
                     "scopes": scopes,
                     "expires_at": expires_at.isoformat() if expires_at is not None else None,
+                    "service_principal_id": service_principal.id if service_principal is not None else None,
                 },
             )
     except IntegrityError:
@@ -143,9 +302,9 @@ def rotate_token(request, pk: int):
     denied = _manager_or_403(request)
     if denied is not None:
         return denied
-    organization = user_organization(request.user)
-    if organization is None:
-        return Response({"detail": "Complete organization setup first."}, status=400)
+    organization, organization_error = _organization_or_400(request)
+    if organization_error is not None:
+        return organization_error
 
     expiration_supplied = "expires_at" in request.data
     expires_at = None
@@ -159,7 +318,7 @@ def rotate_token(request, pk: int):
         with transaction.atomic():
             credential = (
                 ApiCredential.objects.select_for_update()
-                .select_related("created_by")
+                .select_related("created_by", "service_principal")
                 .filter(organization=organization, pk=pk)
                 .first()
             )
@@ -167,6 +326,8 @@ def rotate_token(request, pk: int):
                 return Response({"detail": "API token not found."}, status=404)
             if not credential.is_active:
                 return Response({"detail": "Revoked API tokens cannot be rotated."}, status=409)
+            if credential.service_principal is not None and not credential.service_principal.is_active:
+                return Response({"detail": "Disabled service-principal credentials cannot be rotated."}, status=409)
 
             previous_prefix = credential.token_prefix
             credential.token_prefix = prefix
@@ -187,6 +348,11 @@ def rotate_token(request, pk: int):
                     "token_prefix": credential.token_prefix,
                     "scopes": credential.scopes,
                     "expires_at": credential.expires_at.isoformat() if credential.expires_at is not None else None,
+                    "service_principal_id": (
+                        credential.service_principal_id
+                        if credential.service_principal is not None
+                        else None
+                    ),
                 },
             )
     except IntegrityError:
@@ -206,7 +372,7 @@ def revoke_token(request, pk: int):
     if denied is not None:
         return denied
     organization = user_organization(request.user)
-    credential = ApiCredential.objects.select_related("created_by").filter(
+    credential = ApiCredential.objects.select_related("created_by", "service_principal").filter(
         organization=organization,
         pk=pk,
     ).first()
@@ -223,6 +389,15 @@ def revoke_token(request, pk: int):
             request.user,
             "api_credential.revoke",
             credential,
-            {"name": credential.name, "token_prefix": credential.token_prefix, "scopes": credential.scopes},
+            {
+                "name": credential.name,
+                "token_prefix": credential.token_prefix,
+                "scopes": credential.scopes,
+                "service_principal_id": (
+                    credential.service_principal_id
+                    if credential.service_principal is not None
+                    else None
+                ),
+            },
         )
     return Response(_payload(credential))
