@@ -163,3 +163,39 @@ class IntegrationDelivery(models.Model):
 
     def __str__(self) -> str:
         return f"{self.destination}: {self.event_type} ({self.status})"
+
+
+class NotificationChannel(models.Model):
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="notification_channels",
+    )
+    destination = models.ForeignKey(
+        IntegrationDestination,
+        on_delete=models.CASCADE,
+        related_name="notification_channels",
+    )
+    name = models.CharField(max_length=120)
+    event_types = models.JSONField(default=list)
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="created_notification_channels",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    disabled_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["name", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "name"],
+                name="uniq_notification_channel_org_name",
+            )
+        ]
+
+    def __str__(self) -> str:
+        state = "active" if self.is_active else "disabled"
+        return f"{self.organization}: {self.name} ({state})"
