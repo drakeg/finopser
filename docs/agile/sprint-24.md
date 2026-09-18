@@ -9,6 +9,7 @@ Continue E022 Public API / CLI / Integrations with a controlled, tenant-bound fo
 - #94 — Sprint 24: External integrations and outbound delivery
 - #95 — Sprint 24 slice 1: Establish integration destination lifecycle
 - #97 — Sprint 24 slice 2: Safe signed webhook delivery
+- #99 — Sprint 24 slice 3: Integration administration and acceptance hardening
 
 ## Slice 1 — Integration destination lifecycle
 
@@ -41,3 +42,12 @@ Delivery is transport-injected: production networking is not wired by this slice
 Each delivery records tenant, destination, event identity, status, bounded attempt count, response status, and sanitized error class/status. It never stores request bodies, signing secrets, signatures, authorization headers, or provider exception messages. Delivery retries are bounded to three attempts.
 
 Administration UI, local manager-facing test delivery, and sanitized history inspection remain for the Sprint 24 acceptance slice.
+
+
+## Slice 3 — Administration and acceptance hardening
+
+The Administration workspace now includes tenant-bound webhook destination creation, copy-once signing-secret presentation, enable/disable controls, local test exercise, and recent sanitized delivery history. The local test endpoint deliberately does not contact the configured URL; it records deterministic acceptance evidence only, so GitHub CI and local Docker validation cannot cause external delivery.
+
+Manager-only history and local-test endpoints preserve tenant isolation: cross-tenant objects return 404, non-manager access returns 403, and disabled destinations reject test execution. Delivery history exposes only event identity, status, attempt count, response status, sanitized error state, and timestamps. Request bodies, secrets, signatures, authorization headers, and provider diagnostics are not exposed.
+
+Sprint 24 acceptance is complete once this slice passes CI: destination lifecycle, copy-once secret handling, signed bounded delivery core, sanitized history, manager administration, local test tooling, audit evidence, tenant isolation, and disabled-state enforcement are covered without enabling production outbound delivery.
