@@ -1,6 +1,6 @@
+from django.test import SimpleTestCase
 from django.urls import resolve
 from django.urls.exceptions import Resolver404
-from django.test import SimpleTestCase
 
 
 class IntegrationDestinationDeliveryRouteBoundaryTests(SimpleTestCase):
