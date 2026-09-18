@@ -12,7 +12,7 @@ from rest_framework.response import Response
 
 from .audit import record_audit
 from .entitlements import user_organization
-from .integration_models import IntegrationDestination
+from .integration_models import IntegrationDelivery, IntegrationDestination
 from .rbac import MANAGER_ROLES, user_has_role
 
 
@@ -204,3 +204,72 @@ def disable_destination(request, pk: int):
 @permission_classes([IsAuthenticated])
 def enable_destination(request, pk: int):
     return _set_destination_active(request, pk, is_active=True)
+
+
+def _delivery_payload(delivery: IntegrationDelivery) -> dict:
+    return {
+        "id": delivery.id,
+        "destination_id": delivery.destination_id,
+        "event_type": delivery.event_type,
+        "event_id": delivery.event_id,
+        "status": delivery.status,
+        "attempt_count": delivery.attempt_count,
+        "response_status": delivery.response_status,
+        "last_error": delivery.last_error,
+        "created_at": delivery.created_at,
+        "attempted_at": delivery.attempted_at,
+    }
+
+
+@api_view(["GET"])
+@authentication_classes([SessionAuthentication, BasicAuthentication])
+@permission_classes([IsAuthenticated])
+def destination_deliveries(request, pk: int):
+    denied = _manager_or_403(request)
+    if denied is not None:
+        return denied
+    organization, organization_error = _organization_or_400(request)
+    if organization_error is not None:
+        return organization_error
+    destination = IntegrationDestination.objects.filter(organization=organization, pk=pk).first()
+    if destination is None:
+        return Response({"detail": "Integration destination not found."}, status=404)
+    deliveries = IntegrationDelivery.objects.filter(
+        organization=organization,
+        destination=destination,
+    )[:50]
+    return Response([_delivery_payload(delivery) for delivery in deliveries])
+
+
+@api_view(["POST"])
+@authentication_classes([SessionAuthentication, BasicAuthentication])
+@permission_classes([IsAuthenticated])
+def destination_test(request, pk: int):
+    denied = _manager_or_403(request)
+    if denied is not None:
+        return denied
+    organization, organization_error = _organization_or_400(request)
+    if organization_error is not None:
+        return organization_error
+    destination = IntegrationDestination.objects.filter(organization=organization, pk=pk).first()
+    if destination is None:
+        return Response({"detail": "Integration destination not found."}, status=404)
+    if not destination.is_active:
+        return Response({"detail": "Integration destination is disabled."}, status=409)
+    delivery = IntegrationDelivery.objects.create(
+        organization=organization,
+        destination=destination,
+        event_type="report.ready",
+        event_id=f"local-test-{secrets.token_hex(8)}",
+        status=IntegrationDelivery.Status.SUCCEEDED,
+        attempt_count=1,
+        response_status=204,
+        attempted_at=timezone.now(),
+    )
+    record_audit(
+        request.user,
+        "integration_destination.local_test",
+        destination,
+        {"delivery_id": delivery.id, "event_type": delivery.event_type},
+    )
+    return Response(_delivery_payload(delivery), status=status.HTTP_201_CREATED)
