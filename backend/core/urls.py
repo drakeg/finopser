@@ -71,6 +71,8 @@ urlpatterns = [
     path("integrations/destinations/<int:pk>/", integration_destination_api.destination_detail, name="integration-destination-detail"),
     path("integrations/destinations/<int:pk>/disable/", integration_destination_api.disable_destination, name="integration-destination-disable"),
     path("integrations/destinations/<int:pk>/enable/", integration_destination_api.enable_destination, name="integration-destination-enable"),
+    path("integrations/destinations/<int:pk>/deliveries/", integration_destination_api.destination_deliveries, name="integration-destination-deliveries"),
+    path("integrations/destinations/<int:pk>/test/", integration_destination_api.destination_test, name="integration-destination-test"),
     path(
         "integrations/service-principals/",
         integration_api.service_principals,
