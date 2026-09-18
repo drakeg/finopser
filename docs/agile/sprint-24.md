@@ -8,6 +8,7 @@ Continue E022 Public API / CLI / Integrations with a controlled, tenant-bound fo
 
 - #94 — Sprint 24: External integrations and outbound delivery
 - #95 — Sprint 24 slice 1: Establish integration destination lifecycle
+- #97 — Sprint 24 slice 2: Safe signed webhook delivery
 
 ## Slice 1 — Integration destination lifecycle
 
@@ -29,3 +30,14 @@ This slice deliberately performs no outbound HTTP delivery. Delivery signing, bo
 ## Safety / cost gate
 
 Sprint 24 remains local/GitHub-CI only. No write/remediation API scopes, external paid integration service, production public exposure, recurring spend, live cloud provisioning, or automatic external delivery from CI is authorized. Future delivery tests must use local/fake endpoints only.
+
+
+## Slice 2 — Safe signed webhook delivery
+
+The delivery core supports only the explicit `governance.finding` and `report.ready` event types. It creates a deterministic JSON envelope and HMAC-SHA256 signature using the copy-once destination signing secret supplied by the caller at delivery time.
+
+Delivery is transport-injected: production networking is not wired by this slice, so tests use in-process fake transports only. Disabled destinations and unsupported event types fail before any transport invocation.
+
+Each delivery records tenant, destination, event identity, status, bounded attempt count, response status, and sanitized error class/status. It never stores request bodies, signing secrets, signatures, authorization headers, or provider exception messages. Delivery retries are bounded to three attempts.
+
+Administration UI, local manager-facing test delivery, and sanitized history inspection remain for the Sprint 24 acceptance slice.

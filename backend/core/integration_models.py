@@ -131,3 +131,35 @@ class IntegrationDestination(models.Model):
     def __str__(self) -> str:
         state = "active" if self.is_active else "disabled"
         return f"{self.organization}: {self.name} ({self.destination_type}, {state})"
+
+
+class IntegrationDelivery(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        SUCCEEDED = "succeeded", "Succeeded"
+        FAILED = "failed", "Failed"
+
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="integration_deliveries",
+    )
+    destination = models.ForeignKey(
+        IntegrationDestination,
+        on_delete=models.CASCADE,
+        related_name="deliveries",
+    )
+    event_type = models.CharField(max_length=80)
+    event_id = models.CharField(max_length=64)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+    attempt_count = models.PositiveSmallIntegerField(default=0)
+    response_status = models.PositiveSmallIntegerField(null=True, blank=True)
+    last_error = models.CharField(max_length=240, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    attempted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"{self.destination}: {self.event_type} ({self.status})"
