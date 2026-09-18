@@ -41,8 +41,8 @@ def build_webhook_request(destination, event_type, payload, signing_secret, *, e
         "data": payload,
     }
     body = json.dumps(envelope, separators=(",", ":"), sort_keys=True).encode("utf-8")
-    signed = f"{timestamp}.".encode("utf-8") + body
-    signature = hmac.new(signing_secret.encode("utf-8"), signed, hashlib.sha256).hexdigest()
+    signed = f"{timestamp}.".encode() + body
+    signature = hmac.new(signing_secret.encode(), signed, hashlib.sha256).hexdigest()
     return WebhookRequest(
         url=destination.endpoint_url,
         body=body,
