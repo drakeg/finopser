@@ -1,0 +1,26 @@
+from django.contrib.auth.models import User
+from django.test import TestCase
+from rest_framework.test import APIClient
+
+from .account_models import OrganizationMembership
+from .models import Organization
+
+
+class IntegrationDestinationTenantUniquenessTests(TestCase):
+    def test_same_destination_name_is_allowed_in_different_tenants(self):
+        for index in range(2):
+            organization = Organization.objects.create(name=f"Tenant {index}")
+            owner = User.objects.create_user(username=f"tenant-owner-{index}", password="test-password-long")
+            OrganizationMembership.objects.create(
+                user=owner,
+                organization=organization,
+                role=OrganizationMembership.Role.OWNER,
+            )
+            client = APIClient()
+            client.force_authenticate(owner)
+            response = client.post(
+                "/api/integrations/destinations/",
+                {"name": "events", "endpoint_url": "https://example.test/events"},
+                format="json",
+            )
+            self.assertEqual(response.status_code, 201)
