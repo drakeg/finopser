@@ -9,11 +9,10 @@ from rest_framework.response import Response
 from .audit import record_audit
 from .entitlements import user_organization
 from .integration_models import IntegrationDelivery, IntegrationDestination, NotificationChannel
-from .notification_dispatch import dispatch_notification_event
+from .notification_dispatch import SUPPORTED_NOTIFICATION_EVENTS, dispatch_notification_event
 from .webhook_delivery import WebhookResponse
 from .rbac import MANAGER_ROLES, user_has_role
 
-SUPPORTED_NOTIFICATION_EVENTS = frozenset({"cost.threshold", "governance.finding", "report.ready"})
 
 
 def _manager_or_403(request):
