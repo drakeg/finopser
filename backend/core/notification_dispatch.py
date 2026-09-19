@@ -2,8 +2,9 @@ import hashlib
 
 from .audit import record_audit
 from .integration_models import IntegrationDelivery, NotificationChannel
-from .notification_channel_api import SUPPORTED_NOTIFICATION_EVENTS
 from .webhook_delivery import deliver_webhook
+
+SUPPORTED_NOTIFICATION_EVENTS = frozenset({"cost.threshold", "governance.finding", "report.ready"})
 
 
 def notification_event_id(channel: NotificationChannel, event_type: str, source_id: str) -> str:

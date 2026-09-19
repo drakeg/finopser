@@ -8,10 +8,11 @@ from rest_framework.response import Response
 
 from .audit import record_audit
 from .entitlements import user_organization
-from .integration_models import IntegrationDestination, NotificationChannel
+from .integration_models import IntegrationDelivery, IntegrationDestination, NotificationChannel
+from .notification_dispatch import SUPPORTED_NOTIFICATION_EVENTS, dispatch_notification_event
 from .rbac import MANAGER_ROLES, user_has_role
+from .webhook_delivery import WebhookResponse
 
-SUPPORTED_NOTIFICATION_EVENTS = frozenset({"cost.threshold", "governance.finding", "report.ready"})
 
 
 def _manager_or_403(request):
@@ -134,3 +135,69 @@ def disable_channel(request, pk: int):
 @permission_classes([IsAuthenticated])
 def enable_channel(request, pk: int):
     return _set_active(request, pk, is_active=True)
+
+
+def _delivery_payload(delivery):
+    return {
+        "id": delivery.id,
+        "destination_id": delivery.destination_id,
+        "event_type": delivery.event_type,
+        "event_id": delivery.event_id,
+        "status": delivery.status,
+        "attempt_count": delivery.attempt_count,
+        "response_status": delivery.response_status,
+        "last_error": delivery.last_error,
+        "created_at": delivery.created_at,
+        "attempted_at": delivery.attempted_at,
+    }
+
+
+@api_view(["GET"])
+@authentication_classes([SessionAuthentication, BasicAuthentication])
+@permission_classes([IsAuthenticated])
+def channel_deliveries(request, pk: int):
+    denied = _manager_or_403(request)
+    if denied is not None:
+        return denied
+    organization, error = _organization_or_400(request)
+    if error is not None:
+        return error
+    channel = NotificationChannel.objects.select_related("destination").filter(organization=organization, pk=pk).first()
+    if channel is None:
+        return Response({"detail": "Notification channel not found."}, status=404)
+    deliveries = IntegrationDelivery.objects.filter(organization=organization, destination=channel.destination)[:50]
+    return Response([_delivery_payload(delivery) for delivery in deliveries])
+
+
+@api_view(["POST"])
+@authentication_classes([SessionAuthentication, BasicAuthentication])
+@permission_classes([IsAuthenticated])
+def test_channel(request, pk: int):
+    denied = _manager_or_403(request)
+    if denied is not None:
+        return denied
+    organization, error = _organization_or_400(request)
+    if error is not None:
+        return error
+    channel = NotificationChannel.objects.select_related("destination").filter(organization=organization, pk=pk).first()
+    if channel is None:
+        return Response({"detail": "Notification channel not found."}, status=404)
+    if not channel.is_active or not channel.destination.is_active:
+        return Response({"detail": "Notification channel and destination must both be active."}, status=409)
+    event_type = str(request.data.get("event_type", "")).strip()
+    if event_type not in channel.event_types:
+        return Response({"detail": "Channel is not subscribed to that event type."}, status=400)
+    source_id = str(request.data.get("source_id", "local-test")).strip() or "local-test"
+    deliveries = dispatch_notification_event(
+        organization,
+        event_type,
+        source_id,
+        {"test": True, "channel_id": channel.id},
+        lambda destination: "finopser_whsec_local-test-only",
+        lambda webhook_request: WebhookResponse(status_code=204),
+        actor=request.user,
+    )
+    delivery = next((item for item in deliveries if item.destination_id == channel.destination_id), None)
+    if delivery is None:
+        return Response({"detail": "No delivery was eligible for this channel."}, status=409)
+    return Response(_delivery_payload(delivery))
