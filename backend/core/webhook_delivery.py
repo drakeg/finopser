@@ -56,16 +56,18 @@ def build_webhook_request(destination, event_type, payload, signing_secret, *, e
     )
 
 
-def deliver_webhook(destination, event_type, payload, signing_secret, transport, *, event_id=None):
+def deliver_webhook(destination, event_type, payload, signing_secret, transport, *, event_id=None, channel=None):
     if not isinstance(destination, IntegrationDestination):
         raise ValueError("A valid integration destination is required.")
     request = build_webhook_request(destination, event_type, payload, signing_secret, event_id=event_id)
-    delivery = IntegrationDelivery.objects.create(
+    delivery, created = IntegrationDelivery.objects.get_or_create(
         organization=destination.organization,
         destination=destination,
-        event_type=event_type,
         event_id=request.headers["X-Finopser-Event-Id"],
+        defaults={"channel": channel, "event_type": event_type},
     )
+    if not created:
+        return delivery
     last_error = ""
     for attempt in range(1, MAX_ATTEMPTS + 1):
         delivery.attempt_count = attempt

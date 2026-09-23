@@ -149,6 +149,13 @@ class IntegrationDelivery(models.Model):
         on_delete=models.CASCADE,
         related_name="deliveries",
     )
+    channel = models.ForeignKey(
+        "NotificationChannel",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="deliveries",
+    )
     event_type = models.CharField(max_length=80)
     event_id = models.CharField(max_length=64)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
@@ -160,6 +167,12 @@ class IntegrationDelivery(models.Model):
 
     class Meta:
         ordering = ["-created_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["organization", "destination", "event_id"],
+                name="uniq_integration_delivery_event",
+            )
+        ]
 
     def __str__(self) -> str:
         return f"{self.destination}: {self.event_type} ({self.status})"

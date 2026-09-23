@@ -32,3 +32,18 @@ Stable source identity combines the durable remediation action id with its lifec
 Outbound data is metadata-only: remediation id, allowlisted action key, lifecycle status, simulation flag, account/resource identifiers and type, and optional recommendation id. Parameters, preview data, provider results/diagnostics, error text, evidence fingerprints, and credentials are excluded.
 
 REQUESTED and APPROVED actions do not emit these events. The producer does not call preview, approve, reject, or execute and does not mutate remediation action/event state. Observe → Recommend → Approve → Execute remains unchanged.
+
+
+## Slice 3 — Notification dispatch and channel acceptance hardening
+
+Issue: #120
+
+Delivery records now retain the originating notification channel, allowing history to remain channel-specific when multiple channels share one integration destination. A database uniqueness constraint on organization, destination, and event id backs deterministic deduplication; webhook delivery uses get-or-create before transport so a competing duplicate resolves to the existing delivery rather than issuing another outbound call.
+
+The local channel test path now explicitly targets the selected channel. It no longer fans out to every matching channel in the organization. Acceptance coverage verifies that a shared destination does not cause one channel's delivery to appear in another channel's history.
+
+History remains metadata-only and continues to omit signing secrets, signatures, request bodies, authorization material, and provider diagnostics.
+
+### Sprint 27 acceptance
+
+Sprint 27 adds metadata-only external events for open recommendations and remediation approval/terminal lifecycle states while preserving Observe → Recommend → Approve → Execute separation. Notification production has no remediation execution side effects. The final hardening slice makes delivery ownership channel-specific and strengthens deterministic duplicate handling without enabling production networking.

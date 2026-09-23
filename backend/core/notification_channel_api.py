@@ -165,7 +165,7 @@ def channel_deliveries(request, pk: int):
     channel = NotificationChannel.objects.select_related("destination").filter(organization=organization, pk=pk).first()
     if channel is None:
         return Response({"detail": "Notification channel not found."}, status=404)
-    deliveries = IntegrationDelivery.objects.filter(organization=organization, destination=channel.destination)[:50]
+    deliveries = IntegrationDelivery.objects.filter(organization=organization, channel=channel)[:50]
     return Response([_delivery_payload(delivery) for delivery in deliveries])
 
 

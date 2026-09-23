@@ -14,6 +14,7 @@ class NotificationAcceptanceTests(TestCase):
         OrganizationMembership.objects.create(user=self.manager, organization=self.organization, role=OrganizationMembership.Role.OWNER)
         self.destination = IntegrationDestination.objects.create(organization=self.organization, name="acceptance-hook", endpoint_url="http://localhost:9999/hook", signing_secret_digest="a" * 64, signing_secret_prefix="finopser_whsec_a", created_by=self.manager)
         self.channel = NotificationChannel.objects.create(organization=self.organization, destination=self.destination, name="acceptance-channel", event_types=["cost.threshold"], created_by=self.manager)
+        self.other_channel = NotificationChannel.objects.create(organization=self.organization, destination=self.destination, name="shared-destination-channel", event_types=["cost.threshold"], created_by=self.manager)
         self.client = APIClient()
         self.client.force_authenticate(self.manager)
 
@@ -24,10 +25,14 @@ class NotificationAcceptanceTests(TestCase):
         self.assertEqual(first.status_code, 200)
         self.assertEqual(first.data["id"], second.data["id"])
         self.assertEqual(IntegrationDelivery.objects.count(), 1)
+        self.assertEqual(IntegrationDelivery.objects.get().channel_id, self.channel.id)
         history = self.client.get(f"/api/notification-channels/{self.channel.id}/deliveries/")
         self.assertEqual(history.status_code, 200)
         self.assertEqual(history.data[0]["id"], first.data["id"])
         self.assertNotIn("signing_secret", history.data[0])
+        other_history = self.client.get(f"/api/notification-channels/{self.other_channel.id}/deliveries/")
+        self.assertEqual(other_history.status_code, 200)
+        self.assertEqual(other_history.data, [])
         self.client.post(f"/api/notification-channels/{self.channel.id}/disable/", {}, format="json")
         self.assertEqual(self.client.post(url, {"event_type": "cost.threshold", "source_id": "budget-43"}, format="json").status_code, 409)
 
