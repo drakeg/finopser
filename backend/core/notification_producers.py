@@ -113,3 +113,46 @@ def dispatch_report_ready(
         transport,
         actor=actor,
     )
+
+
+def recommendation_source_id(recommendation) -> str:
+    return f"recommendation:{recommendation.organization_id}:{recommendation.source_key}"
+
+
+def recommendation_payload(recommendation) -> dict:
+    return {
+        "recommendation_id": recommendation.id,
+        "source_type": recommendation.source_type,
+        "category": recommendation.category,
+        "priority": recommendation.priority,
+        "status": recommendation.status,
+        "title": recommendation.title,
+        "estimated_monthly_savings": (
+            str(recommendation.estimated_monthly_savings)
+            if recommendation.estimated_monthly_savings is not None
+            else None
+        ),
+        "account_id": recommendation.cloud_account_id,
+        "project_id": recommendation.project_id,
+        "resource_id": recommendation.resource_id,
+    }
+
+
+def dispatch_recommendation_open(
+    recommendation,
+    *,
+    signing_secret_for,
+    transport,
+    actor=None,
+):
+    if not recommendation.organization_id or recommendation.status != recommendation.Status.OPEN:
+        return []
+    return dispatch_notification_event(
+        recommendation.organization,
+        "recommendation.open",
+        recommendation_source_id(recommendation),
+        recommendation_payload(recommendation),
+        signing_secret_for,
+        transport,
+        actor=actor,
+    )
