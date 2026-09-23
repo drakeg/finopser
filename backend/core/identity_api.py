@@ -50,7 +50,6 @@ def _config_payload(config: EnterpriseIdentityConfig | None) -> dict:
     }
 
 
-
 def _token_digest(value: str) -> str:
     return hashlib.sha256(value.encode()).hexdigest()
 
@@ -99,16 +98,17 @@ def begin_oidc_authorization(request):
     )
 
     authorization_endpoint = f"{config.issuer_url.rstrip('/')}/authorize"
-    authorization_url = f"{authorization_endpoint}?{urlencode({
-        'response_type': 'code',
-        'client_id': config.client_id,
-        'redirect_uri': redirect_uri,
-        'scope': 'openid email profile',
-        'state': state,
-        'nonce': nonce,
-        'code_challenge': challenge,
-        'code_challenge_method': 'S256',
-    })}"
+    authorization_params = {
+        "response_type": "code",
+        "client_id": config.client_id,
+        "redirect_uri": redirect_uri,
+        "scope": "openid email profile",
+        "state": state,
+        "nonce": nonce,
+        "code_challenge": challenge,
+        "code_challenge_method": "S256",
+    }
+    authorization_url = f"{authorization_endpoint}?{urlencode(authorization_params)}"
     return Response(
         {
             "provider": "oidc",
