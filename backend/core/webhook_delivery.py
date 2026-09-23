@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from .integration_models import IntegrationDelivery, IntegrationDestination
 
-SUPPORTED_EVENT_TYPES = frozenset({"cost.threshold", "governance.finding", "recommendation.open", "report.ready"})
+SUPPORTED_EVENT_TYPES = frozenset({"cost.threshold", "governance.finding", "recommendation.open", "remediation.approval_required", "remediation.completed", "report.ready"})
 MAX_ATTEMPTS = 3
 
 
