@@ -4,7 +4,7 @@ from .audit import record_audit
 from .integration_models import IntegrationDelivery, NotificationChannel
 from .webhook_delivery import deliver_webhook
 
-SUPPORTED_NOTIFICATION_EVENTS = frozenset({"cost.threshold", "governance.finding", "recommendation.open", "report.ready"})
+SUPPORTED_NOTIFICATION_EVENTS = frozenset({"cost.threshold", "governance.finding", "recommendation.open", "remediation.approval_required", "remediation.completed", "report.ready"})
 
 
 def notification_event_id(channel: NotificationChannel, event_type: str, source_id: str) -> str:
