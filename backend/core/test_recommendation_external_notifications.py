@@ -51,7 +51,7 @@ class RecommendationExternalNotificationTests(TestCase):
         return "finopser_whsec_recommendation-test"
 
     def test_open_recommendation_dispatch_is_metadata_only_deduplicated_and_side_effect_free(self):
-        self.assertEqual(recommendation_source_id(self.recommendation), "recommendation:%s:cost-growth:ec2" % self.organization.id)
+        self.assertEqual(recommendation_source_id(self.recommendation), f"recommendation:{self.organization.id}:cost-growth:ec2")
         payload = recommendation_payload(self.recommendation)
         self.assertNotIn("evidence", payload)
         self.assertNotIn("detail", payload)
