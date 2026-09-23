@@ -156,3 +156,54 @@ def dispatch_recommendation_open(
         transport,
         actor=actor,
     )
+
+
+def remediation_event_type(action) -> str | None:
+    if action.status == action.Status.PREVIEWED:
+        return "remediation.approval_required"
+    if action.status in {
+        action.Status.SUCCEEDED,
+        action.Status.FAILED,
+        action.Status.STALE,
+        action.Status.REJECTED,
+    }:
+        return "remediation.completed"
+    return None
+
+
+def remediation_source_id(action) -> str:
+    return f"remediation:{action.id}:{action.status}"
+
+
+def remediation_payload(action) -> dict:
+    return {
+        "remediation_id": action.id,
+        "action_key": action.action_key,
+        "status": action.status,
+        "simulation": action.simulation,
+        "account_id": action.cloud_account_id,
+        "resource_id": action.resource_id,
+        "resource_type": action.resource.resource_type,
+        "recommendation_id": action.recommendation_id,
+    }
+
+
+def dispatch_remediation_lifecycle(
+    action,
+    *,
+    signing_secret_for,
+    transport,
+    actor=None,
+):
+    event_type = remediation_event_type(action)
+    if event_type is None or not action.cloud_account.organization_id:
+        return []
+    return dispatch_notification_event(
+        action.cloud_account.organization,
+        event_type,
+        remediation_source_id(action),
+        remediation_payload(action),
+        signing_secret_for,
+        transport,
+        actor=actor,
+    )
