@@ -15,3 +15,14 @@ The producer delegates channel selection, active-state checks, tenant isolation,
 ## Safety / cost gate
 
 No paid notification provider, production outbound networking, recurring spend, live cloud provisioning, automatic external delivery from CI, or write/remediation public API scopes are authorized.
+
+
+## Slice 2 — Governance finding external notification events
+
+Issue: #111
+
+Open, non-excepted compliance findings can now be mapped to the supported `governance.finding` event. The stable source identity is the durable compliance-finding id, so repeated dispatch attempts are coalesced by the shared Sprint 25 delivery policy.
+
+The outbound payload intentionally excludes the finding's raw evidence JSON. It contains only finding id, control code/title, severity/status, resource provider id/type, and region. Resolved and excepted findings fail closed. Channel subscription, destination/channel active state, tenant isolation, signing, retry bounds, duplicate suppression, and sanitized audit evidence continue to be enforced by the shared dispatch layer.
+
+Existing compliance evaluation and in-app notification behavior is unchanged. Automated coverage uses injected transient signing material and an in-process fake transport only.

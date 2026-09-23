@@ -37,3 +37,41 @@ def dispatch_budget_threshold(
         transport,
         actor=actor,
     )
+
+
+def governance_finding_source_id(finding) -> str:
+    return f"compliance-finding:{finding.id}"
+
+
+def governance_finding_payload(finding) -> dict:
+    return {
+        "finding_id": finding.id,
+        "control_code": finding.control.code,
+        "control_title": finding.control.title,
+        "severity": finding.severity,
+        "status": finding.status,
+        "resource_id": finding.resource.provider_resource_id,
+        "resource_type": finding.resource.resource_type,
+        "region": finding.resource.region,
+    }
+
+
+def dispatch_governance_finding(
+    finding,
+    *,
+    signing_secret_for,
+    transport,
+    actor=None,
+):
+    if finding.status != finding.Status.OPEN:
+        return []
+    organization = finding.cloud_account.organization
+    return dispatch_notification_event(
+        organization,
+        "governance.finding",
+        governance_finding_source_id(finding),
+        governance_finding_payload(finding),
+        signing_secret_for,
+        transport,
+        actor=actor,
+    )
