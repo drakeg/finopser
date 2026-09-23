@@ -17,3 +17,18 @@ Notification dispatch remains side-effect free with respect to remediation: prod
 ## Safety / cost gate
 
 Automated coverage uses transient test signing material and in-process fake transport only. No production outbound networking, paid provider, live cloud provisioning, recurring spend, automatic external delivery from CI, automatic remediation, or write/remediation public API scope is authorized.
+
+
+## Slice 2 — Remediation lifecycle external notification events
+
+Issue: #118
+
+Existing remediation lifecycle state can now be mapped to two explicit external notification events without invoking the remediation engine:
+- `remediation.approval_required` for PREVIEWED actions that are waiting for an authorized approval decision.
+- `remediation.completed` for SUCCEEDED, FAILED, STALE, and REJECTED terminal outcomes.
+
+Stable source identity combines the durable remediation action id with its lifecycle status. This deduplicates retries of the same state while allowing later distinct states to produce their own event.
+
+Outbound data is metadata-only: remediation id, allowlisted action key, lifecycle status, simulation flag, account/resource identifiers and type, and optional recommendation id. Parameters, preview data, provider results/diagnostics, error text, evidence fingerprints, and credentials are excluded.
+
+REQUESTED and APPROVED actions do not emit these events. The producer does not call preview, approve, reject, or execute and does not mutate remediation action/event state. Observe → Recommend → Approve → Execute remains unchanged.
