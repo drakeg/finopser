@@ -1,4 +1,5 @@
 from .notification_dispatch import dispatch_notification_event
+from .reporting import REPORT_CATALOG
 
 
 def budget_threshold_source_id(budget, snapshot) -> str:
@@ -71,6 +72,43 @@ def dispatch_governance_finding(
         "governance.finding",
         governance_finding_source_id(finding),
         governance_finding_payload(finding),
+        signing_secret_for,
+        transport,
+        actor=actor,
+    )
+
+
+def report_ready_payload(report_result) -> dict:
+    definition = report_result["report"]
+    return {
+        "report_code": definition.code,
+        "report_name": definition.name,
+        "generated_at": report_result["generated_at"].isoformat(),
+        "row_count": report_result["row_count"],
+        "truncated": report_result["truncated"],
+    }
+
+
+def dispatch_report_ready(
+    organization,
+    report_result,
+    source_id,
+    *,
+    signing_secret_for,
+    transport,
+    actor=None,
+):
+    source_id = str(source_id).strip()
+    if not source_id:
+        raise ValueError("Report source id is required")
+    definition = report_result.get("report")
+    if definition is None or definition.code not in REPORT_CATALOG:
+        raise ValueError("Unknown report definition")
+    return dispatch_notification_event(
+        organization,
+        "report.ready",
+        source_id,
+        report_ready_payload(report_result),
         signing_secret_for,
         transport,
         actor=actor,
