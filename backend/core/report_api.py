@@ -19,12 +19,11 @@ from .reporting import (
     report_catalog,
 )
 from .reporting_actions import (
-    action_report_allowed,
     action_report_catalog,
+    action_report_allowed,
     build_recommendations_report,
     build_remediation_history_report,
 )
-
 
 
 REPORT_ENDPOINTS = {
