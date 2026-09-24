@@ -127,6 +127,7 @@ urlpatterns = [
     path("report-schedules/", report_schedule_api.schedules, name="report-schedules"),
     path("report-schedules/<int:pk>/disable/", report_schedule_api.disable_schedule, name="report-schedule-disable"),
     path("report-schedules/<int:pk>/enable/", report_schedule_api.enable_schedule, name="report-schedule-enable"),
+    path("report-schedules/<int:pk>/generate/", report_schedule_api.generate_schedule, name="report-schedule-generate"),
     path("report-generations/", report_schedule_api.generations, name="report-generations"),
     path("reports/resource-inventory.csv", report_api.resource_inventory_csv, name="report-resource-inventory-csv"),
     path("reports/cost-detail.csv", report_api.cost_detail_csv, name="report-cost-detail-csv"),
