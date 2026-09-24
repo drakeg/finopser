@@ -37,3 +37,25 @@ No OIDC client secret is stored in the flow table. Existing `secret_reference` c
 ## Safety / cost gate
 
 No paid identity provider, production SSO activation, hosted authentication service, external directory provisioning, SCIM, production infrastructure, live provider calls from CI, or recurring spend is authorized.
+
+
+## Slice 2 — OIDC callback validation and identity linking boundary
+
+The callback boundary validates a one-time authorization flow before establishing a local session. State is looked up by SHA-256 digest under a database lock and must be unconsumed and unexpired.
+
+Provider token exchange and cryptographic claim verification remain behind an injected validated-claims adapter. The default adapter fails closed, and automated tests inject local fake validated claims; no live IdP request is made.
+
+Before accepting an identity, the callback requires:
+- enabled OIDC configuration;
+- exact configured issuer;
+- configured client id in the audience;
+- provider subject;
+- exact nonce from the originating flow;
+- explicitly verified email;
+- email domain matching the tenant configuration.
+
+A durable identity link stores only tenant identity configuration, local user, provider subject, normalized email, and authentication timestamps. It stores no authorization code, access/refresh/id token, raw claims, PKCE verifier, client secret, or secret reference.
+
+New identities are not provisioned in this slice. A first link is allowed only when exactly one active local user has the verified email and that user already belongs to the configured workspace. Unknown or ambiguous users fail closed. Successful flow state is consumed once; replay is rejected.
+
+Local password authentication remains unchanged.
