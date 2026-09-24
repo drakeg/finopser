@@ -36,6 +36,14 @@ These standards apply to every Finopser sprint and pull request.
 - Use fakes/mocks at external/provider boundaries; test the real application policy around those boundaries.
 - Verify tenant isolation and negative authorization paths whenever scoped data or privileged actions change.
 
+## Required pre-PR quality gate
+
+Before a PR is described as merge-ready, run `bash scripts/check.sh` in a development environment with backend/frontend dependencies installed and the normal local database/cache configuration available.
+
+The script intentionally mirrors the fast CI gates: Ruff, Django system/migration checks, backend tests, CLI tests, frontend lint/build, and Docker Compose configuration validation. Full Compose startup/health remains a CI gate because it is more expensive.
+
+If the script and CI disagree, CI is authoritative and the mismatch should be corrected in the script so the same class of failure is caught locally next time.
+
 ## Commits and pull requests
 
 - Use focused, imperative commit messages.
