@@ -8,6 +8,7 @@ Complete E015 by restoring the previously implemented interactive reporting expe
 
 - #136 — Sprint 30: Reporting and export completion
 - #137 — Slice 1: Report catalog and download workspace
+- #139 — Slice 2: Durable report schedules and local generation metadata
 
 ## Slice 1 — Report workspace regression restoration
 
@@ -18,6 +19,16 @@ The backend report catalog now includes the authoritative authenticated download
 The Reports page again loads the entitlement-filtered catalog and provides explicit CSV downloads. Downloads use the existing authenticated endpoints, so tenant scoping, report entitlements, audit logging, deterministic schemas, and the 5,000-row synchronous cap remain backend-authoritative.
 
 Download failures are surfaced as recoverable UI errors. Scheduled generation and external delivery remain visibly disabled and are not implied by the restored workspace.
+
+## Slice 2 — Durable scheduling boundary
+
+Report schedules are now durable tenant-scoped intent records with a name, supported report code, cadence, active state, creator, and lifecycle timestamps. Managers can create, enable, and disable schedules; authenticated workspace members can inspect schedules only when the underlying report remains entitled to them.
+
+The slice deliberately does **not** register Celery Beat tasks, execute reports automatically, or deliver reports externally. It establishes the durable configuration boundary without silently turning configuration into execution.
+
+Report generation history stores metadata only: report code, schedule reference, success/failure state, row count, truncation flag, requester, and generation time. Exported CSV bodies are not persisted in the history model. History is tenant-scoped and entitlement-filtered.
+
+Schedule create/enable/disable actions are audited with sanitized report/cadence metadata.
 
 ## Engineering-process documentation
 
