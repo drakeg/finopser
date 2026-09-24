@@ -4,7 +4,8 @@ from django.test import TestCase
 from .account_models import OrganizationMembership
 from .integration_models import IntegrationDelivery, IntegrationDestination, NotificationChannel
 from .models import Organization
-from .notification_producers import dispatch_report_ready, report_ready_payload
+from .notification_producers import dispatch_report_generation_ready, dispatch_report_ready, report_ready_payload
+from .report_models import ReportGeneration
 from .reporting import build_audit_events_report
 from .webhook_delivery import WebhookResponse
 
@@ -49,3 +50,43 @@ class ReportReadyExternalNotificationTests(TestCase):
         self.channel.save(update_fields=["event_types", "is_active"])
         self.assertEqual(dispatch_report_ready(self.organization, result, "report-2", signing_secret_for=self.secret_for, transport=self.transport), [])
         self.assertEqual(self.calls, [])
+
+
+    def test_persisted_generation_bridges_to_ready_event_without_report_content(self):
+        generation = ReportGeneration.objects.create(
+            organization=self.organization,
+            report_code="audit-events",
+            status=ReportGeneration.Status.SUCCEEDED,
+            row_count=7,
+            truncated=False,
+            requested_by=self.user,
+        )
+        deliveries = dispatch_report_generation_ready(
+            generation,
+            signing_secret_for=self.secret_for,
+            transport=self.transport,
+            actor=self.user,
+        )
+        self.assertEqual(len(deliveries), 1)
+        self.assertEqual(deliveries[0].event_type, "report.ready")
+        self.assertEqual(len(self.calls), 1)
+        body = self.calls[0].body.decode()
+        self.assertIn('"row_count":7', body)
+        self.assertNotIn("csv", body.lower())
+        self.assertNotIn("content", body.lower())
+
+        failed = ReportGeneration.objects.create(
+            organization=self.organization,
+            report_code="audit-events",
+            status=ReportGeneration.Status.FAILED,
+            requested_by=self.user,
+        )
+        self.assertEqual(
+            dispatch_report_generation_ready(
+                failed,
+                signing_secret_for=self.secret_for,
+                transport=self.transport,
+                actor=self.user,
+            ),
+            [],
+        )
