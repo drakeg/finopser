@@ -56,6 +56,16 @@ docker compose exec backend python manage.py createsuperuser
 
 The API session endpoint is available at `/api/auth/session/`.
 
+## Run the quality gate
+
+Before opening or updating a pull request, run:
+
+```bash
+bash scripts/check.sh
+```
+
+This runs the repository's fast backend, CLI, frontend, migration, and Compose configuration checks together. It requires the development dependencies to be installed and the normal local database/cache configuration to be available.
+
 ## Stop the platform
 
 ```bash
