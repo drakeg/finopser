@@ -26,6 +26,28 @@ from .reporting_actions import (
 )
 
 
+REPORT_ENDPOINTS = {
+    "resource-inventory": "/api/reports/resource-inventory.csv",
+    "cost-detail": "/api/reports/cost-detail.csv",
+    "compliance-findings": "/api/reports/compliance-findings.csv",
+    "policy-violations": "/api/reports/policy-violations.csv",
+    "recommendations": "/api/reports/recommendations.csv",
+    "remediation-history": "/api/reports/remediation-history.csv",
+    "audit-events": "/api/reports/audit-events.csv",
+}
+
+
+def _catalog_payload(user):
+    definitions = report_catalog(user) + action_report_catalog(user)
+    return [
+        {
+            **definition,
+            "endpoint": REPORT_ENDPOINTS[definition["code"]],
+        }
+        for definition in definitions
+    ]
+
+
 def _optional_bool(value):
     if value is None or value == "":
         return None
@@ -93,7 +115,7 @@ def _add_audit_integrity_headers(response, integrity):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def catalog(request):
-    return Response({"reports": report_catalog(request.user) + action_report_catalog(request.user)})
+    return Response({"reports": _catalog_payload(request.user)})
 
 
 @api_view(["GET"])

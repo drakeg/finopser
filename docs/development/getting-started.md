@@ -5,7 +5,7 @@
 - Git
 - Docker Engine / Docker Desktop with Compose v2
 
-No AWS account is required for Sprint 1.
+No AWS account is required for the default local development and CI workflow. Provider integrations that need live cloud access must be explicitly authorized and configured.
 
 ## Start the platform
 
@@ -46,7 +46,7 @@ PostgreSQL and Redis are intentionally internal-only in the default Compose topo
 
 ## Authentication foundation
 
-Django authentication and session infrastructure are enabled. Sprint 1 does not yet provide the final product login experience or RBAC model.
+Django session authentication, tenant-aware RBAC, and the current product login experience are enabled. Enterprise identity/provider flows remain subject to their documented activation boundaries.
 
 To create a local administrative user:
 
@@ -55,6 +55,16 @@ docker compose exec backend python manage.py createsuperuser
 ```
 
 The API session endpoint is available at `/api/auth/session/`.
+
+## Run the quality gate
+
+Before opening or updating a pull request, run:
+
+```bash
+bash scripts/check.sh
+```
+
+This runs the repository's fast backend, CLI, frontend, migration, and Compose configuration checks together. It requires the development dependencies to be installed and the normal local database/cache configuration to be available.
 
 ## Stop the platform
 

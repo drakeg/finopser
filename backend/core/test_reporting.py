@@ -102,7 +102,11 @@ class ReportingFoundationTests(TestCase):
         self.assertEqual(response.status_code, 200)
         reports = {report["code"]: report for report in response.json()["reports"]}
         self.assertEqual(reports["resource-inventory"]["format"], "csv")
+        self.assertEqual(reports["resource-inventory"]["endpoint"], "/api/reports/resource-inventory.csv")
         self.assertEqual(reports["cost-detail"]["target"], "Costs")
+        self.assertEqual(reports["cost-detail"]["endpoint"], "/api/reports/cost-detail.csv")
+        self.assertNotIn("organization", reports["resource-inventory"])
+        self.assertNotIn("credentials", reports["resource-inventory"])
 
     def test_resource_inventory_csv_is_tenant_scoped_and_deterministic(self):
         response = self.client.get("/api/reports/resource-inventory.csv")
