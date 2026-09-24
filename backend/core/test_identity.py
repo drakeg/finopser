@@ -1,14 +1,19 @@
 import base64
 import hashlib
+from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
 from django.contrib.auth.models import User
 from django.test import TestCase
 from django.utils import timezone
-from unittest.mock import patch
 from rest_framework.test import APIClient
 
-from .account_models import EnterpriseIdentityConfig, EnterpriseIdentityFlow, EnterpriseIdentityLink, OrganizationMembership
+from .account_models import (
+    EnterpriseIdentityConfig,
+    EnterpriseIdentityFlow,
+    EnterpriseIdentityLink,
+    OrganizationMembership,
+)
 from .models import AuditEvent, Organization
 
 
@@ -330,7 +335,7 @@ class EnterpriseIdentityTests(TestCase):
         ]
         for claims in invalid_claim_sets:
             with self.subTest(claims=claims):
-                with patch("core.identity_api.OIDC_CLAIMS_VALIDATOR", lambda *args: claims):
+                with patch("core.identity_api.OIDC_CLAIMS_VALIDATOR", lambda *args, claims=claims: claims):
                     response = self.client.post(
                         "/api/auth/sso/oidc/callback/",
                         {"state": state, "code": "fake-code"},
