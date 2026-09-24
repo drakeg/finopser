@@ -8,6 +8,7 @@ from rest_framework.test import APIClient
 
 from .account_models import OrganizationMembership
 from .models import CloudAccount, CloudResource, CostRecord, Organization, OrganizationNode, Project
+from .report_models import ReportGeneration
 
 
 class ReportingFoundationTests(TestCase):
@@ -199,3 +200,88 @@ class ReportingFoundationTests(TestCase):
         self.assertEqual(event.actor, self.user)
         self.assertEqual(event.metadata["report"], "resource-inventory")
         self.assertEqual(event.metadata["row_count"], 1)
+
+
+    def test_report_schedule_lifecycle_is_tenant_scoped_and_audited(self):
+        created = self.client.post(
+            "/api/report-schedules/",
+            {"name": "Weekly inventory", "report_code": "resource-inventory", "cadence": "weekly"},
+            format="json",
+        )
+        self.assertEqual(created.status_code, 201)
+        schedule_id = created.json()["id"]
+        self.assertTrue(created.json()["is_active"])
+        self.assertEqual(self.organization.report_schedules.count(), 1)
+        self.assertEqual(self.other.report_schedules.count(), 0)
+
+        disabled = self.client.post(f"/api/report-schedules/{schedule_id}/disable/", {}, format="json")
+        self.assertEqual(disabled.status_code, 200)
+        self.assertFalse(disabled.json()["is_active"])
+        enabled = self.client.post(f"/api/report-schedules/{schedule_id}/enable/", {}, format="json")
+        self.assertEqual(enabled.status_code, 200)
+        self.assertTrue(enabled.json()["is_active"])
+
+        actions = set(
+            self.organization.audit_events.filter(object_type="ReportSchedule").values_list("action", flat=True)
+        )
+        self.assertEqual(
+            actions,
+            {"report_schedule.create", "report_schedule.disable", "report_schedule.enable"},
+        )
+
+    def test_report_schedule_rejects_unsupported_report_and_member_mutation(self):
+        unsupported = self.client.post(
+            "/api/report-schedules/",
+            {"name": "Unknown", "report_code": "not-a-report", "cadence": "daily"},
+            format="json",
+        )
+        self.assertEqual(unsupported.status_code, 400)
+
+        member = User.objects.create_user(username="report-member", password="test-password-long")
+        OrganizationMembership.objects.create(
+            user=member,
+            organization=self.organization,
+            role=OrganizationMembership.Role.MEMBER,
+        )
+        self.client.logout()
+        self.client.login(username=member.username, password="test-password-long")
+        denied = self.client.post(
+            "/api/report-schedules/",
+            {"name": "Daily inventory", "report_code": "resource-inventory", "cadence": "daily"},
+            format="json",
+        )
+        self.assertEqual(denied.status_code, 403)
+        self.assertEqual(self.client.get("/api/report-schedules/").status_code, 200)
+
+    def test_generation_history_contains_metadata_only_and_is_tenant_scoped(self):
+        schedule = self.organization.report_schedules.create(
+            name="Monthly inventory",
+            report_code="resource-inventory",
+            cadence="monthly",
+            created_by=self.user,
+        )
+        ReportGeneration.objects.create(
+            organization=self.organization,
+            schedule=schedule,
+            report_code="resource-inventory",
+            status=ReportGeneration.Status.SUCCEEDED,
+            row_count=42,
+            truncated=False,
+            requested_by=self.user,
+        )
+        ReportGeneration.objects.create(
+            organization=self.other,
+            report_code="resource-inventory",
+            status=ReportGeneration.Status.SUCCEEDED,
+            row_count=999,
+        )
+
+        response = self.client.get("/api/report-generations/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.json()), 1)
+        payload = response.json()[0]
+        self.assertEqual(payload["row_count"], 42)
+        self.assertEqual(
+            set(payload),
+            {"id", "schedule", "report_code", "status", "row_count", "truncated", "generated_at"},
+        )
