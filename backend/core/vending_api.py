@@ -1,5 +1,6 @@
 # ruff: noqa: I001
 from django.db import IntegrityError, transaction
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -9,7 +10,12 @@ from .audit import record_audit
 from .entitlements import user_organization
 from .models import OrganizationNode, Project
 from .rbac import MANAGER_ROLES, user_has_role
-from .vending_models import AccountProvisioningPlan, AccountVendingRequest
+from .vending_execution import PROVISIONING_ADAPTER, ProvisioningExecutionError
+from .vending_models import (
+    AccountProvisioningExecution,
+    AccountProvisioningPlan,
+    AccountVendingRequest,
+)
 
 
 BASELINE_PROFILES = {
@@ -242,3 +248,92 @@ def provisioning_plan(request, pk: int):
                 {"plan_id": plan.id, "provider": "disabled", "live_provisioning": False},
             )
     return Response(_plan_payload(plan), status=status.HTTP_201_CREATED if created else 200)
+
+
+
+def _execution_payload(execution: AccountProvisioningExecution) -> dict:
+    return {
+        "id": execution.id,
+        "plan_id": execution.plan_id,
+        "status": execution.status,
+        "provider": execution.provider,
+        "result": execution.result,
+        "requested_by": execution.requested_by.get_username(),
+        "created_at": execution.created_at,
+        "completed_at": execution.completed_at,
+    }
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def provisioning_executions(request, pk: int):
+    item = _scoped_item(request, pk)
+    if item is None:
+        return Response({"detail": "Request not found."}, status=404)
+    plan = AccountProvisioningPlan.objects.filter(
+        organization=item.organization,
+        vending_request=item,
+    ).first()
+    if plan is None:
+        return Response({"detail": "Provisioning plan not found."}, status=404)
+
+    if request.method == "GET":
+        executions = plan.executions.select_related("requested_by").filter(
+            organization=item.organization
+        )
+        return Response([_execution_payload(execution) for execution in executions])
+
+    if not user_has_role(request.user, MANAGER_ROLES):
+        return Response({"detail": "Manager access is required."}, status=403)
+    if item.status != AccountVendingRequest.Status.APPROVED:
+        return Response({"detail": "Only approved requests can be executed."}, status=409)
+
+    with transaction.atomic():
+        locked_plan = AccountProvisioningPlan.objects.select_for_update().get(pk=plan.pk)
+        if locked_plan.executions.filter(
+            status=AccountProvisioningExecution.Status.RUNNING
+        ).exists():
+            return Response({"detail": "A provisioning execution is already running."}, status=409)
+        execution = AccountProvisioningExecution.objects.create(
+            plan=locked_plan,
+            organization=item.organization,
+            status=AccountProvisioningExecution.Status.RUNNING,
+            provider=getattr(PROVISIONING_ADAPTER, "provider", "disabled"),
+            requested_by=request.user,
+        )
+        record_audit(
+            request.user,
+            "account_vending.execute_requested",
+            item,
+            {"execution_id": execution.id, "provider": execution.provider},
+        )
+
+    try:
+        provider_result = PROVISIONING_ADAPTER.execute(plan.intent)
+    except ProvisioningExecutionError:
+        execution.status = AccountProvisioningExecution.Status.FAILED
+        execution.result = {"outcome": "provider_disabled"}
+    except Exception:
+        execution.status = AccountProvisioningExecution.Status.FAILED
+        execution.result = {"outcome": "provider_error"}
+    else:
+        execution.status = AccountProvisioningExecution.Status.SUCCEEDED
+        execution.provider = provider_result.provider
+        execution.result = {
+            "outcome": "succeeded",
+            "reference": provider_result.reference,
+            "message": provider_result.message,
+        }
+    execution.completed_at = timezone.now()
+    execution.save(update_fields=["status", "provider", "result", "completed_at"])
+    record_audit(
+        request.user,
+        "account_vending.execute_completed",
+        item,
+        {
+            "execution_id": execution.id,
+            "provider": execution.provider,
+            "status": execution.status,
+        },
+    )
+    return Response(_execution_payload(execution), status=status.HTTP_201_CREATED)
