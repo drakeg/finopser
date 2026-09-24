@@ -4,7 +4,7 @@ from rest_framework.test import APIClient
 
 from .account_models import OrganizationMembership
 from .models import AuditEvent, Organization
-from .vending_models import AccountVendingRequest
+from .vending_models import AccountProvisioningPlan, AccountVendingRequest
 
 
 class AccountVendingTests(TestCase):
@@ -134,3 +134,81 @@ class AccountVendingTests(TestCase):
         )
         self.assertEqual(response.status_code, 400)
         self.assertFalse(AccountVendingRequest.objects.filter(organization=self.organization).exists())
+
+
+    def test_approved_request_creates_idempotent_disabled_provisioning_plan(self):
+        created = self._create()
+        self.client.force_authenticate(self.owner)
+        self.client.post(
+            f"/api/account-vending/requests/{created.data['id']}/approve/",
+            {},
+            format="json",
+        )
+
+        url = f"/api/account-vending/requests/{created.data['id']}/plan/"
+        first = self.client.post(url, {}, format="json")
+        second = self.client.post(url, {}, format="json")
+
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(first.data["id"], second.data["id"])
+        self.assertEqual(AccountProvisioningPlan.objects.count(), 1)
+        self.assertEqual(first.data["provider"], "disabled")
+        self.assertFalse(first.data["live_provisioning"])
+        self.assertEqual(first.data["intent"]["request_id"], created.data["id"])
+        self.assertEqual(first.data["intent"]["baseline"]["profile"], "production")
+        self.assertIn("production-guardrails", first.data["intent"]["baseline"]["actions"])
+        self.assertEqual(AccountVendingRequest.objects.get(pk=created.data["id"]).status, "approved")
+        self.assertTrue(
+            AuditEvent.objects.filter(
+                organization=self.organization,
+                action="account_vending.plan",
+            ).exists()
+        )
+
+    def test_plan_creation_requires_manager_approved_request_and_tenant_scope(self):
+        pending = self._create()
+        url = f"/api/account-vending/requests/{pending.data['id']}/plan/"
+
+        denied = self.client.post(url, {}, format="json")
+        self.assertEqual(denied.status_code, 403)
+        self.assertFalse(AccountProvisioningPlan.objects.exists())
+
+        self.client.force_authenticate(self.owner)
+        not_approved = self.client.post(url, {}, format="json")
+        self.assertEqual(not_approved.status_code, 409)
+        self.assertFalse(AccountProvisioningPlan.objects.exists())
+
+        other = self._create(user=self.other_owner, email="plan-other@example.com")
+        self.client.force_authenticate(self.other_owner)
+        self.client.post(
+            f"/api/account-vending/requests/{other.data['id']}/approve/",
+            {},
+            format="json",
+        )
+        self.client.force_authenticate(self.owner)
+        hidden = self.client.post(
+            f"/api/account-vending/requests/{other.data['id']}/plan/",
+            {},
+            format="json",
+        )
+        self.assertEqual(hidden.status_code, 404)
+        self.assertFalse(AccountProvisioningPlan.objects.exists())
+
+    def test_workspace_member_can_read_existing_plan_but_not_create_one(self):
+        created = self._create()
+        self.client.force_authenticate(self.owner)
+        self.client.post(
+            f"/api/account-vending/requests/{created.data['id']}/approve/",
+            {},
+            format="json",
+        )
+        url = f"/api/account-vending/requests/{created.data['id']}/plan/"
+        planned = self.client.post(url, {}, format="json")
+        self.assertEqual(planned.status_code, 201)
+
+        self.client.force_authenticate(self.member)
+        read = self.client.get(url)
+        self.assertEqual(read.status_code, 200)
+        self.assertEqual(read.data["id"], planned.data["id"])
+        self.assertFalse(read.data["live_provisioning"])
