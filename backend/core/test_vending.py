@@ -313,3 +313,54 @@ class AccountVendingTests(TestCase):
             f"/api/account-vending/requests/{other.data['id']}/executions/"
         )
         self.assertEqual(hidden.status_code, 404)
+
+
+    def test_execution_history_is_tenant_scoped_and_explicit_retries_are_separate(self):
+        created = self._approved_plan()
+        url = f"/api/account-vending/requests/{created.data['id']}/executions/"
+
+        first = self.client.post(url, {}, format="json")
+        second = self.client.post(url, {}, format="json")
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(second.status_code, 201)
+        self.assertNotEqual(first.data["id"], second.data["id"])
+        self.assertEqual(first.data["result"], {"outcome": "provider_disabled"})
+        self.assertEqual(second.data["result"], {"outcome": "provider_disabled"})
+
+        history = self.client.get(url)
+        self.assertEqual(history.status_code, 200)
+        self.assertEqual([row["id"] for row in history.data], [second.data["id"], first.data["id"]])
+        self.assertTrue(all(row["provider"] == "disabled" for row in history.data))
+        self.assertTrue(all("exception" not in row["result"] for row in history.data))
+
+        other = self._create(user=self.other_owner, email="history-other@example.com")
+        self.client.force_authenticate(self.other_owner)
+        self.client.post(
+            f"/api/account-vending/requests/{other.data['id']}/approve/",
+            {},
+            format="json",
+        )
+        self.client.post(
+            f"/api/account-vending/requests/{other.data['id']}/plan/",
+            {},
+            format="json",
+        )
+        self.client.force_authenticate(self.owner)
+        hidden = self.client.get(
+            f"/api/account-vending/requests/{other.data['id']}/executions/"
+        )
+        self.assertEqual(hidden.status_code, 404)
+
+    def test_execution_attempts_do_not_change_plan_intent(self):
+        created = self._approved_plan()
+        plan = AccountProvisioningPlan.objects.get()
+        original_intent = plan.intent
+        self.client.post(
+            f"/api/account-vending/requests/{created.data['id']}/executions/",
+            {},
+            format="json",
+        )
+        plan.refresh_from_db()
+        self.assertEqual(plan.intent, original_intent)
+        self.assertFalse(plan.live_provisioning)
+        self.assertEqual(plan.provider, "disabled")
