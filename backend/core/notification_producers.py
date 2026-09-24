@@ -207,3 +207,35 @@ def dispatch_remediation_lifecycle(
         transport,
         actor=actor,
     )
+
+
+
+def report_generation_notification_result(generation):
+    definition = REPORT_CATALOG.get(generation.report_code)
+    if definition is None:
+        raise ValueError("Unknown report definition")
+    return {
+        "report": definition,
+        "generated_at": generation.generated_at,
+        "row_count": generation.row_count,
+        "truncated": generation.truncated,
+    }
+
+
+def dispatch_report_generation_ready(
+    generation,
+    *,
+    signing_secret_for,
+    transport,
+    actor=None,
+):
+    if generation.status != generation.Status.SUCCEEDED:
+        return []
+    return dispatch_report_ready(
+        generation.organization,
+        report_generation_notification_result(generation),
+        f"report-generation:{generation.id}",
+        signing_secret_for=signing_secret_for,
+        transport=transport,
+        actor=actor,
+    )

@@ -25,7 +25,7 @@
 | E012 | Remediation & Automation | P1 | Controlled jobs and remediation under Observe/Recommend/Enforce rules. |
 | E013 | Budgets & Financial Governance | P1 | Budgets, thresholds, allocation, notifications, and later enforcement. |
 | E014 | Notifications | P1 | In-app and configurable external notifications. |
-| E015 | Reporting & Export | P1 | Interactive reporting and exportable evidence/data. |
+| E015 | Reporting & Export | P1 | **Current scope complete (Sprint 30):** interactive tenant-scoped exports, durable schedule intent, explicit local generation metadata/history, and a safe notification boundary. |
 | E016 | Audit & Evidence | P0 | Immutable application audit events for privileged and governance-relevant changes. |
 | E017 | Enterprise Identity | P2 | OIDC/SAML/SSO and enterprise identity lifecycle. |
 | E018 | AWS Account Vending | P2 | Controlled AWS account provisioning and baseline application. |

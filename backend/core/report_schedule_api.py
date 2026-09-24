@@ -10,8 +10,32 @@ from .audit import record_audit
 from .entitlements import user_organization
 from .rbac import MANAGER_ROLES, user_has_role
 from .report_models import ReportGeneration, ReportSchedule
-from .reporting import REPORT_CATALOG, report_allowed
-from .reporting_actions import ACTION_REPORT_CATALOG, action_report_allowed
+from .reporting import (
+    REPORT_CATALOG,
+    build_audit_events_report,
+    build_compliance_findings_report,
+    build_cost_detail_report,
+    build_policy_violations_report,
+    build_resource_inventory_report,
+    report_allowed,
+)
+from .reporting_actions import (
+    ACTION_REPORT_CATALOG,
+    action_report_allowed,
+    build_recommendations_report,
+    build_remediation_history_report,
+)
+
+
+REPORT_BUILDERS = {
+    "resource-inventory": build_resource_inventory_report,
+    "cost-detail": build_cost_detail_report,
+    "compliance-findings": build_compliance_findings_report,
+    "policy-violations": build_policy_violations_report,
+    "recommendations": build_recommendations_report,
+    "remediation-history": build_remediation_history_report,
+    "audit-events": build_audit_events_report,
+}
 
 
 def _organization_or_400(request):
@@ -146,4 +170,55 @@ def generations(request):
             for item in queryset
             if _report_supported(request.user, item.report_code)
         ]
+    )
+
+
+@api_view(["POST"])
+@authentication_classes([SessionAuthentication, BasicAuthentication])
+@permission_classes([IsAuthenticated])
+def generate_schedule(request, pk):
+    denied = _manager_or_403(request)
+    if denied is not None:
+        return denied
+    organization, error = _organization_or_400(request)
+    if error is not None:
+        return error
+    schedule = ReportSchedule.objects.filter(organization=organization, pk=pk, is_active=True).first()
+    if schedule is None:
+        return Response({"detail": "Active report schedule not found."}, status=404)
+    if not _report_supported(request.user, schedule.report_code):
+        return Response({"detail": "Report is no longer available."}, status=409)
+
+    result = REPORT_BUILDERS[schedule.report_code](request.user)
+    generation = ReportGeneration.objects.create(
+        organization=organization,
+        schedule=schedule,
+        report_code=schedule.report_code,
+        status=ReportGeneration.Status.SUCCEEDED,
+        row_count=result["row_count"],
+        truncated=result["truncated"],
+        requested_by=request.user,
+    )
+    record_audit(
+        request.user,
+        "report_generation.create",
+        generation,
+        {
+            "report": generation.report_code,
+            "schedule_id": schedule.id,
+            "row_count": generation.row_count,
+            "truncated": generation.truncated,
+        },
+    )
+    return Response(
+        {
+            "id": generation.id,
+            "schedule": generation.schedule_id,
+            "report_code": generation.report_code,
+            "status": generation.status,
+            "row_count": generation.row_count,
+            "truncated": generation.truncated,
+            "generated_at": generation.generated_at,
+        },
+        status=status.HTTP_201_CREATED,
     )

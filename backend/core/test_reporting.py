@@ -285,3 +285,63 @@ class ReportingFoundationTests(TestCase):
             set(payload),
             {"id", "schedule", "report_code", "status", "row_count", "truncated", "generated_at"},
         )
+
+
+    def test_manager_explicitly_generates_metadata_without_persisting_csv(self):
+        schedule = self.organization.report_schedules.create(
+            name="Manual inventory",
+            report_code="resource-inventory",
+            cadence="weekly",
+            created_by=self.user,
+        )
+        response = self.client.post(f"/api/report-schedules/{schedule.id}/generate/", {}, format="json")
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["report_code"], "resource-inventory")
+        self.assertEqual(response.json()["row_count"], 1)
+        generation = ReportGeneration.objects.get(pk=response.json()["id"])
+        self.assertEqual(generation.organization, self.organization)
+        self.assertEqual(generation.requested_by, self.user)
+        self.assertFalse(hasattr(generation, "content"))
+        self.assertFalse(hasattr(generation, "csv"))
+        event = self.organization.audit_events.get(action="report_generation.create")
+        self.assertEqual(event.metadata["report"], "resource-inventory")
+        self.assertNotIn("content", event.metadata)
+
+    def test_explicit_generation_fails_closed_for_disabled_cross_tenant_and_member(self):
+        schedule = self.organization.report_schedules.create(
+            name="Disabled inventory",
+            report_code="resource-inventory",
+            cadence="daily",
+            is_active=False,
+            created_by=self.user,
+        )
+        self.assertEqual(
+            self.client.post(f"/api/report-schedules/{schedule.id}/generate/", {}, format="json").status_code,
+            404,
+        )
+
+        other_schedule = self.other.report_schedules.create(
+            name="Other tenant",
+            report_code="resource-inventory",
+            cadence="daily",
+            created_by=self.other_user,
+        )
+        self.assertEqual(
+            self.client.post(f"/api/report-schedules/{other_schedule.id}/generate/", {}, format="json").status_code,
+            404,
+        )
+
+        member = User.objects.create_user(username="generation-member", password="test-password-long")
+        OrganizationMembership.objects.create(
+            user=member,
+            organization=self.organization,
+            role=OrganizationMembership.Role.MEMBER,
+        )
+        schedule.is_active = True
+        schedule.save(update_fields=["is_active"])
+        self.client.logout()
+        self.client.login(username=member.username, password="test-password-long")
+        self.assertEqual(
+            self.client.post(f"/api/report-schedules/{schedule.id}/generate/", {}, format="json").status_code,
+            403,
+        )
