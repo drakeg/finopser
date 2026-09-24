@@ -367,3 +367,39 @@ class EnterpriseIdentityTests(TestCase):
             )
         self.assertEqual(expired.status_code, 401)
         self.assertFalse(EnterpriseIdentityLink.objects.exists())
+
+
+    def test_enterprise_discovery_preserves_local_login_fallback(self):
+        self.assertEqual(self._configure_oidc().status_code, 200)
+        self.client.force_authenticate(user=None)
+
+        discovery = self.client.post(
+            "/api/auth/sso/discover/",
+            {"email": "person@example.com"},
+            format="json",
+        )
+        self.assertEqual(discovery.status_code, 200)
+        self.assertEqual(discovery.data, {"sso_available": True, "provider": "oidc"})
+
+        local_login = self.client.post(
+            "/api/auth/login/",
+            {"username": self.owner.username, "password": "test-password-long"},
+            format="json",
+        )
+        self.assertEqual(local_login.status_code, 200)
+        self.assertTrue(local_login.data["authenticated"])
+
+    def test_enterprise_discovery_does_not_leak_unknown_workspace_configuration(self):
+        self.assertEqual(self._configure_oidc().status_code, 200)
+        self.client.force_authenticate(user=None)
+
+        response = self.client.post(
+            "/api/auth/sso/discover/",
+            {"email": "person@unknown.example"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, {"sso_available": False, "provider": None})
+        self.assertNotIn("issuer_url", response.data)
+        self.assertNotIn("client_id", response.data)
+        self.assertNotIn("secret_reference", response.data)
