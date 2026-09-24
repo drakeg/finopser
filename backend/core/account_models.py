@@ -219,3 +219,25 @@ class EnterpriseIdentityConfig(models.Model):
 
     def __str__(self) -> str:
         return f"{self.organization}: {self.provider} ({'enabled' if self.enabled else 'disabled'})"
+
+
+
+class EnterpriseIdentityFlow(models.Model):
+    identity_config = models.ForeignKey(
+        EnterpriseIdentityConfig,
+        on_delete=models.CASCADE,
+        related_name="authentication_flows",
+    )
+    state_digest = models.CharField(max_length=64, unique=True)
+    nonce = models.CharField(max_length=128)
+    pkce_verifier = models.CharField(max_length=128)
+    redirect_uri = models.URLField(max_length=1024)
+    expires_at = models.DateTimeField(db_index=True)
+    consumed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"{self.identity_config_id}: flow {self.id}"

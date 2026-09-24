@@ -1,10 +1,17 @@
+import base64
+import hashlib
+import secrets
+from datetime import timedelta
+from urllib.parse import urlencode
+
 from django.db import IntegrityError, transaction
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from .account_models import EnterpriseIdentityConfig
+from .account_models import EnterpriseIdentityConfig, EnterpriseIdentityFlow
 from .audit import record_audit
 from .entitlements import user_organization
 from .rbac import GovernancePermission
@@ -41,6 +48,74 @@ def _config_payload(config: EnterpriseIdentityConfig | None) -> dict:
         "entity_id": config.entity_id,
         "secret_reference_configured": bool(config.secret_reference),
     }
+
+
+def _token_digest(value: str) -> str:
+    return hashlib.sha256(value.encode()).hexdigest()
+
+
+def _pkce_challenge(verifier: str) -> str:
+    digest = hashlib.sha256(verifier.encode()).digest()
+    return base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def begin_oidc_authorization(request):
+    email = str(request.data.get("email", "")).strip().lower()
+    domain = email.rpartition("@")[2] if "@" in email else ""
+    domain = _normalize_domain(domain)
+    if not domain:
+        return Response({"detail": "A valid email address is required."}, status=400)
+
+    config = EnterpriseIdentityConfig.objects.filter(
+        enabled=True,
+        provider=EnterpriseIdentityConfig.Provider.OIDC,
+        email_domain__iexact=domain,
+    ).first()
+    if config is None or not config.issuer_url or not config.client_id:
+        return Response({"detail": "OIDC is not available for that email domain."}, status=404)
+
+    state = secrets.token_urlsafe(32)
+    nonce = secrets.token_urlsafe(32)
+    verifier = secrets.token_urlsafe(48)
+    challenge = _pkce_challenge(verifier)
+    redirect_uri = request.build_absolute_uri("/api/auth/sso/oidc/callback/")
+    expires_at = timezone.now() + timedelta(minutes=10)
+
+    EnterpriseIdentityFlow.objects.filter(
+        identity_config=config,
+        expires_at__lt=timezone.now(),
+        consumed_at__isnull=True,
+    ).delete()
+    EnterpriseIdentityFlow.objects.create(
+        identity_config=config,
+        state_digest=_token_digest(state),
+        nonce=nonce,
+        pkce_verifier=verifier,
+        redirect_uri=redirect_uri,
+        expires_at=expires_at,
+    )
+
+    authorization_endpoint = f"{config.issuer_url.rstrip('/')}/authorize"
+    authorization_params = {
+        "response_type": "code",
+        "client_id": config.client_id,
+        "redirect_uri": redirect_uri,
+        "scope": "openid email profile",
+        "state": state,
+        "nonce": nonce,
+        "code_challenge": challenge,
+        "code_challenge_method": "S256",
+    }
+    authorization_url = f"{authorization_endpoint}?{urlencode(authorization_params)}"
+    return Response(
+        {
+            "provider": "oidc",
+            "authorization_url": authorization_url,
+            "expires_in": 600,
+        }
+    )
 
 
 @api_view(["POST"])

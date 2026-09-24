@@ -1,8 +1,12 @@
+import base64
+import hashlib
+from urllib.parse import parse_qs, urlparse
+
 from django.contrib.auth.models import User
 from django.test import TestCase
 from rest_framework.test import APIClient
 
-from .account_models import EnterpriseIdentityConfig, OrganizationMembership
+from .account_models import EnterpriseIdentityConfig, EnterpriseIdentityFlow, OrganizationMembership
 from .models import AuditEvent, Organization
 
 
@@ -151,3 +155,80 @@ class EnterpriseIdentityTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.data["authenticated"])
+
+
+    def test_oidc_authorization_request_is_tenant_bound_pkce_and_secret_safe(self):
+        configured = self._configure_oidc()
+        self.assertEqual(configured.status_code, 200)
+        self.client.force_authenticate(user=None)
+
+        response = self.client.post(
+            "/api/auth/sso/oidc/authorize/",
+            {"email": "person@example.com"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["provider"], "oidc")
+        self.assertEqual(response.data["expires_in"], 600)
+        parsed = urlparse(response.data["authorization_url"])
+        query = parse_qs(parsed.query)
+        self.assertEqual(parsed.scheme, "https")
+        self.assertEqual(parsed.netloc, "idp.example.test")
+        self.assertEqual(parsed.path, "/authorize")
+        self.assertEqual(query["client_id"], ["finopser-test-client"])
+        self.assertEqual(query["response_type"], ["code"])
+        self.assertEqual(query["scope"], ["openid email profile"])
+        self.assertEqual(query["code_challenge_method"], ["S256"])
+        self.assertNotIn("secret_reference", response.data["authorization_url"])
+        self.assertNotIn("FINOPSER_OIDC_CLIENT_SECRET", response.data["authorization_url"])
+
+        flow = EnterpriseIdentityFlow.objects.select_related("identity_config").get()
+        self.assertEqual(flow.identity_config.organization, self.organization)
+        self.assertEqual(
+            flow.state_digest,
+            hashlib.sha256(query["state"][0].encode()).hexdigest(),
+        )
+        self.assertEqual(flow.nonce, query["nonce"][0])
+        expected_challenge = base64.urlsafe_b64encode(
+            hashlib.sha256(flow.pkce_verifier.encode()).digest()
+        ).rstrip(b"=").decode()
+        self.assertEqual(query["code_challenge"], [expected_challenge])
+        self.assertNotIn(flow.pkce_verifier, response.data["authorization_url"])
+        self.assertGreater(flow.expires_at, flow.created_at)
+        self.assertIsNone(flow.consumed_at)
+
+    def test_oidc_authorization_fails_closed_for_missing_disabled_or_saml_config(self):
+        self.client.force_authenticate(user=None)
+        missing = self.client.post(
+            "/api/auth/sso/oidc/authorize/",
+            {"email": "person@missing.example"},
+            format="json",
+        )
+        self.assertEqual(missing.status_code, 404)
+        self.assertFalse(EnterpriseIdentityFlow.objects.exists())
+
+        disabled = self._configure_oidc(domain="disabled.example", enabled=False)
+        self.assertEqual(disabled.status_code, 200)
+        self.client.force_authenticate(user=None)
+        response = self.client.post(
+            "/api/auth/sso/oidc/authorize/",
+            {"email": "person@disabled.example"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(EnterpriseIdentityFlow.objects.exists())
+
+        config = EnterpriseIdentityConfig.objects.get(organization=self.organization)
+        config.enabled = True
+        config.provider = EnterpriseIdentityConfig.Provider.SAML
+        config.metadata_url = "https://idp.example.test/metadata"
+        config.entity_id = "urn:finopser:test"
+        config.save(update_fields=["enabled", "provider", "metadata_url", "entity_id"])
+        response = self.client.post(
+            "/api/auth/sso/oidc/authorize/",
+            {"email": "person@disabled.example"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(EnterpriseIdentityFlow.objects.exists())
