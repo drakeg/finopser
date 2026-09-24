@@ -71,3 +71,32 @@ class AccountVendingRequest(models.Model):
 
     def __str__(self) -> str:
         return f"{self.organization}: {self.account_name} ({self.status})"
+
+
+
+class AccountProvisioningPlan(models.Model):
+    vending_request = models.OneToOneField(
+        AccountVendingRequest,
+        on_delete=models.CASCADE,
+        related_name="provisioning_plan",
+    )
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="account_provisioning_plans",
+    )
+    provider = models.CharField(max_length=32, default="disabled")
+    live_provisioning = models.BooleanField(default=False)
+    intent = models.JSONField(default=dict)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="created_account_provisioning_plans",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"{self.vending_request}: plan"
