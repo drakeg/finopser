@@ -16,6 +16,7 @@ from . import (
     recommendation_api,
     remediation_api,
     report_api,
+    report_schedule_api,
     vending_api,
     views,
 )
@@ -123,6 +124,10 @@ urlpatterns = [
     path("notifications/<int:pk>/unread/", notification_api.mark_unread, name="notification-mark-unread"),
     path("audit-integrity/", audit_integrity_api.integrity, name="audit-integrity"),
     path("reports/", report_api.catalog, name="report-catalog"),
+    path("report-schedules/", report_schedule_api.schedules, name="report-schedules"),
+    path("report-schedules/<int:pk>/disable/", report_schedule_api.disable_schedule, name="report-schedule-disable"),
+    path("report-schedules/<int:pk>/enable/", report_schedule_api.enable_schedule, name="report-schedule-enable"),
+    path("report-generations/", report_schedule_api.generations, name="report-generations"),
     path("reports/resource-inventory.csv", report_api.resource_inventory_csv, name="report-resource-inventory-csv"),
     path("reports/cost-detail.csv", report_api.cost_detail_csv, name="report-cost-detail-csv"),
     path("reports/compliance-findings.csv", report_api.compliance_findings_csv, name="report-compliance-findings-csv"),
