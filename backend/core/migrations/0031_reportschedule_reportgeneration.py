@@ -5,7 +5,7 @@ from django.db.models import deletion
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("core", "0030_accountprovisioningexecution"),
+        ("core", "0030_account_provisioning_execution"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
