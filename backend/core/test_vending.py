@@ -1,10 +1,17 @@
 from django.contrib.auth.models import User
+from unittest.mock import patch
+
 from django.test import TestCase
 from rest_framework.test import APIClient
 
 from .account_models import OrganizationMembership
 from .models import AuditEvent, Organization
-from .vending_models import AccountProvisioningPlan, AccountVendingRequest
+from .vending_execution import ProvisioningResult
+from .vending_models import (
+    AccountProvisioningExecution,
+    AccountProvisioningPlan,
+    AccountVendingRequest,
+)
 
 
 class AccountVendingTests(TestCase):
@@ -212,3 +219,97 @@ class AccountVendingTests(TestCase):
         self.assertEqual(read.status_code, 200)
         self.assertEqual(read.data["id"], planned.data["id"])
         self.assertFalse(read.data["live_provisioning"])
+
+
+    def _approved_plan(self):
+        created = self._create()
+        self.client.force_authenticate(self.owner)
+        self.client.post(
+            f"/api/account-vending/requests/{created.data['id']}/approve/",
+            {},
+            format="json",
+        )
+        self.client.post(
+            f"/api/account-vending/requests/{created.data['id']}/plan/",
+            {},
+            format="json",
+        )
+        return created
+
+    def test_default_execution_adapter_fails_closed_without_provider_mutation(self):
+        created = self._approved_plan()
+        url = f"/api/account-vending/requests/{created.data['id']}/executions/"
+        response = self.client.post(url, {}, format="json")
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["status"], "failed")
+        self.assertEqual(response.data["provider"], "disabled")
+        self.assertEqual(response.data["result"], {"outcome": "provider_disabled"})
+        self.assertEqual(AccountVendingRequest.objects.get(pk=created.data["id"]).status, "approved")
+        self.assertFalse(AccountProvisioningPlan.objects.get().live_provisioning)
+
+    def test_fake_adapter_success_records_only_sanitized_result_metadata(self):
+        created = self._approved_plan()
+        url = f"/api/account-vending/requests/{created.data['id']}/executions/"
+
+        class FakeAdapter:
+            provider = "fake"
+
+            def execute(self, intent):
+                self.intent = intent
+                return ProvisioningResult(
+                    provider="fake",
+                    reference="fake-account-123",
+                    message="Local fake provisioning completed.",
+                )
+
+        adapter = FakeAdapter()
+        with patch("core.vending_api.PROVISIONING_ADAPTER", adapter):
+            response = self.client.post(url, {}, format="json")
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["status"], "succeeded")
+        self.assertEqual(response.data["provider"], "fake")
+        self.assertEqual(
+            response.data["result"],
+            {
+                "outcome": "succeeded",
+                "reference": "fake-account-123",
+                "message": "Local fake provisioning completed.",
+            },
+        )
+        self.assertEqual(adapter.intent, AccountProvisioningPlan.objects.get().intent)
+        self.assertNotIn("credentials", response.data["result"])
+        self.assertNotIn("secret", response.data["result"])
+        self.assertTrue(
+            AuditEvent.objects.filter(
+                organization=self.organization,
+                action="account_vending.execute_completed",
+            ).exists()
+        )
+
+    def test_execution_is_manager_only_tenant_scoped_and_rejects_active_attempt(self):
+        created = self._approved_plan()
+        url = f"/api/account-vending/requests/{created.data['id']}/executions/"
+        self.client.force_authenticate(self.member)
+        denied = self.client.post(url, {}, format="json")
+        self.assertEqual(denied.status_code, 403)
+
+        plan = AccountProvisioningPlan.objects.get()
+        AccountProvisioningExecution.objects.create(
+            plan=plan,
+            organization=self.organization,
+            requested_by=self.owner,
+            status=AccountProvisioningExecution.Status.RUNNING,
+        )
+        self.client.force_authenticate(self.owner)
+        conflict = self.client.post(url, {}, format="json")
+        self.assertEqual(conflict.status_code, 409)
+        self.assertEqual(AccountProvisioningExecution.objects.count(), 1)
+
+        other = self._create(user=self.other_owner, email="execute-other@example.com")
+        self.client.force_authenticate(self.owner)
+        hidden = self.client.get(
+            f"/api/account-vending/requests/{other.data['id']}/executions/"
+        )
+        self.assertEqual(hidden.status_code, 404)
