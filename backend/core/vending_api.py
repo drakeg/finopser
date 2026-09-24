@@ -9,7 +9,7 @@ from .audit import record_audit
 from .entitlements import user_organization
 from .models import OrganizationNode, Project
 from .rbac import MANAGER_ROLES, user_has_role
-from .vending_models import AccountVendingRequest
+from .vending_models import AccountProvisioningPlan, AccountVendingRequest
 
 
 BASELINE_PROFILES = {
@@ -167,3 +167,78 @@ def preview(request, pk: int):
     }
     record_audit(request.user, "account_vending.preview", item, {"ready_for_provisioning": result["ready_for_provisioning"]})
     return Response(result)
+
+
+def _plan_intent(item: AccountVendingRequest) -> dict:
+    return {
+        "request_id": item.id,
+        "account": {
+            "name": item.account_name,
+            "email": item.account_email,
+            "environment": item.environment,
+        },
+        "placement": {
+            "organization_node": item.organization_node_id,
+            "project": item.project_id,
+        },
+        "baseline": {
+            "profile": item.baseline_profile,
+            "actions": list(BASELINE_PROFILES[item.baseline_profile]),
+        },
+    }
+
+
+def _plan_payload(plan: AccountProvisioningPlan) -> dict:
+    return {
+        "id": plan.id,
+        "request_id": plan.vending_request_id,
+        "provider": plan.provider,
+        "live_provisioning": plan.live_provisioning,
+        "intent": plan.intent,
+        "created_by": plan.created_by.get_username(),
+        "created_at": plan.created_at,
+    }
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def provisioning_plan(request, pk: int):
+    item = _scoped_item(request, pk)
+    if item is None:
+        return Response({"detail": "Request not found."}, status=404)
+
+    existing = AccountProvisioningPlan.objects.select_related("created_by").filter(
+        organization=item.organization,
+        vending_request=item,
+    ).first()
+    if request.method == "GET":
+        if existing is None:
+            return Response({"detail": "Provisioning plan not found."}, status=404)
+        return Response(_plan_payload(existing))
+
+    if not user_has_role(request.user, MANAGER_ROLES):
+        return Response({"detail": "Manager access is required."}, status=403)
+    if item.status != AccountVendingRequest.Status.APPROVED:
+        return Response({"detail": "Only approved requests can be planned."}, status=409)
+    if existing is not None:
+        return Response(_plan_payload(existing))
+
+    with transaction.atomic():
+        plan, created = AccountProvisioningPlan.objects.get_or_create(
+            vending_request=item,
+            defaults={
+                "organization": item.organization,
+                "provider": "disabled",
+                "live_provisioning": False,
+                "intent": _plan_intent(item),
+                "created_by": request.user,
+            },
+        )
+        if created:
+            record_audit(
+                request.user,
+                "account_vending.plan",
+                item,
+                {"plan_id": plan.id, "provider": "disabled", "live_provisioning": False},
+            )
+    return Response(_plan_payload(plan), status=status.HTTP_201_CREATED if created else 200)
