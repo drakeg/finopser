@@ -9,6 +9,7 @@ Complete E015 by restoring the previously implemented interactive reporting expe
 - #136 — Sprint 30: Reporting and export completion
 - #137 — Slice 1: Report catalog and download workspace
 - #139 — Slice 2: Durable report schedules and local generation metadata
+- #141 — Slice 3: Reporting acceptance hardening and notification boundary
 
 ## Slice 1 — Report workspace regression restoration
 
@@ -29,6 +30,18 @@ The slice deliberately does **not** register Celery Beat tasks, execute reports 
 Report generation history stores metadata only: report code, schedule reference, success/failure state, row count, truncation flag, requester, and generation time. Exported CSV bodies are not persisted in the history model. History is tenant-scoped and entitlement-filtered.
 
 Schedule create/enable/disable actions are audited with sanitized report/cadence metadata.
+
+## Slice 3 — Acceptance hardening and notification boundary
+
+Managers can explicitly generate an active schedule on demand. Generation runs synchronously against the existing tenant-scoped report builders and persists only metadata: report code, schedule, status, row count, truncation state, requester, and timestamp. CSV bodies are neither stored nor copied into audit history.
+
+The Reports workspace surfaces durable schedules, explicit **Generate now** controls, and recent generation history. The UI does not imply that the cadence currently causes background execution.
+
+Successful persisted generation metadata can be adapted to the existing `report.ready` producer with a stable `report-generation:<id>` source identity. This adapter remains dependency-injected: no signing-secret resolver or network transport is wired into report generation, so generating a report cannot silently send data externally.
+
+Acceptance coverage verifies manager-only explicit generation, disabled/cross-tenant fail-closed behavior, metadata-only persistence, audit evidence, and metadata-only `report.ready` payloads.
+
+With these slices, E015's current local/self-hosted reporting scope is complete. Hosted scheduling and automatic external report delivery remain separate future work requiring explicit authorization.
 
 ## Engineering-process documentation
 
