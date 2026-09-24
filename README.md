@@ -2,7 +2,7 @@
 
 Self-hosted cloud governance and FinOps platform, initially focused on AWS, with Docker-first local deployment and an AWS-ready architecture.
 
-> **Project status:** Sprint 1 — Application Foundation
+> **Project status:** Active iterative development — see the current numbered sprint under `docs/agile/`.
 
 ## Local quick start
 
@@ -23,11 +23,13 @@ Sprint 1 establishes the local application foundation only. No AWS credentials a
 
 - [Product vision](docs/agile/product-vision.md)
 - [Product backlog](docs/agile/product-backlog.md)
-- [Sprint 1](docs/agile/sprint-1.md)
+- [Sprint process](docs/agile/sprint-process.md)
+- [Coding standards](docs/development/coding-standards.md)
 - [Definition of Ready](docs/agile/definition-of-ready.md)
 - [Definition of Done](docs/agile/definition-of-done.md)
 - [Architecture overview](docs/architecture/overview.md)
 - [Domain model](docs/architecture/domain-model.md)
 - [Security model](docs/security/security-model.md)
 - [Testing strategy](docs/testing/strategy.md)
+- [Sprint history](docs/agile/)
 - [ADRs](docs/adr/README.md)
