@@ -1,0 +1,22 @@
+# Sprint 31 — Product Completion Audit and Gap Hardening
+
+## Goal
+
+Audit the current product against the durable backlog and completed sprint claims, repair concrete regressions, and harden release readiness before adding provider breadth.
+
+## Issues
+
+- #143 — Sprint 31: Product completion audit and gap hardening
+- #144 — Slice 1: Acceptance audit and account-vending rejection regression
+
+## Slice 1 finding
+
+The account-vending backend already supported manager rejection of pending requests with a required reason, tenant scoping, and audit coverage. The Administration UI had regressed to exposing only **Approve**, so the documented approval/rejection lifecycle was not actually complete from the product surface.
+
+Slice 1 restores **Reject** beside **Approve** for pending requests. A manager must provide a non-empty reason before the existing reject endpoint is called. Canceling or submitting an empty reason performs no request. Backend RBAC and tenant checks remain authoritative.
+
+The product acceptance matrix records current evidence separately from historical sprint completion claims so future audits can identify regressions rather than assuming documentation proves the current UI/API path.
+
+## Safety / cost gate
+
+No live AWS provisioning, provider credentials, paid services, production infrastructure, recurring spend, or automatic execution is introduced.
