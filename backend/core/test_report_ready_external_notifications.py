@@ -4,7 +4,11 @@ from django.test import TestCase
 from .account_models import OrganizationMembership
 from .integration_models import IntegrationDelivery, IntegrationDestination, NotificationChannel
 from .models import Organization
-from .notification_producers import dispatch_report_generation_ready, dispatch_report_ready, report_ready_payload
+from .notification_producers import (
+    dispatch_report_generation_ready,
+    dispatch_report_ready,
+    report_ready_payload,
+)
 from .report_models import ReportGeneration
 from .reporting import build_audit_events_report
 from .webhook_delivery import WebhookResponse
