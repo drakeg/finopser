@@ -59,3 +59,22 @@ A durable identity link stores only tenant identity configuration, local user, p
 New identities are not provisioned in this slice. A first link is allowed only when exactly one active local user has the verified email and that user already belongs to the configured workspace. Unknown or ambiguous users fail closed. Successful flow state is consumed once; replay is rejected.
 
 Local password authentication remains unchanged.
+
+
+## Slice 3 — Enterprise login UX and fallback acceptance
+
+The unauthenticated login experience now offers an explicit enterprise discovery path based on work email while preserving local username/password sign-in as a visible fallback.
+
+Discovery exposes only whether enterprise SSO is available and the configured provider type. Unknown or disabled domains remain on local login and do not receive issuer, client, secret-reference, tenant, or other configuration details.
+
+For an OIDC workspace, the user may explicitly start the existing authorization-request flow and the frontend navigates only to the returned authorization URL. The frontend does not receive or handle client secrets, secret references, provider tokens, authorization codes, PKCE verifiers, or raw claims.
+
+SAML discovery is represented without pretending that a SAML authentication flow exists: the UI states that SAML sign-in is not enabled yet and keeps local login available.
+
+Discovery and authorization-start errors are recoverable and do not disable local authentication.
+
+## Sprint 28 acceptance
+
+Sprint 28 now provides the local/fake-provider-tested foundation for OIDC discovery, authorization request state/PKCE, callback validation boundaries, controlled linking to existing workspace users, replay protection, and login UX. Production IdP token exchange/cryptographic verification remains deliberately unconfigured and fail-closed.
+
+Local username/password authentication remains available as fallback/break-glass access. No production SSO activation, paid identity provider, hosted authentication service, external directory provisioning, SCIM, live provider calls from CI, production infrastructure, or recurring spend is introduced.
