@@ -4,6 +4,7 @@ import secrets
 from datetime import timedelta
 from urllib.parse import urlencode
 
+from django.contrib import auth
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 from rest_framework import status
@@ -14,6 +15,7 @@ from rest_framework.response import Response
 from .account_models import EnterpriseIdentityConfig, EnterpriseIdentityFlow
 from .audit import record_audit
 from .entitlements import user_organization
+from .oidc_auth import OIDCValidationError, complete_oidc_callback
 from .rbac import GovernancePermission
 
 
@@ -114,6 +116,34 @@ def begin_oidc_authorization(request):
             "provider": "oidc",
             "authorization_url": authorization_url,
             "expires_in": 600,
+        }
+    )
+
+
+def _unconfigured_oidc_validator(config, code, pkce_verifier, redirect_uri):
+    raise OIDCValidationError("OIDC provider validation is not configured.")
+
+
+OIDC_CLAIMS_VALIDATOR = _unconfigured_oidc_validator
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def oidc_callback(request):
+    state = str(request.data.get("state", ""))
+    code = str(request.data.get("code", ""))
+    try:
+        user = complete_oidc_callback(state, code, OIDC_CLAIMS_VALIDATOR)
+    except OIDCValidationError:
+        return Response({"detail": "OIDC authentication failed."}, status=401)
+
+    auth.login(request, user)
+    return Response(
+        {
+            "authenticated": True,
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
         }
     )
 
