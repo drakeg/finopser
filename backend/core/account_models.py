@@ -241,3 +241,36 @@ class EnterpriseIdentityFlow(models.Model):
 
     def __str__(self) -> str:
         return f"{self.identity_config_id}: flow {self.id}"
+
+
+
+class EnterpriseIdentityLink(models.Model):
+    identity_config = models.ForeignKey(
+        EnterpriseIdentityConfig,
+        on_delete=models.CASCADE,
+        related_name="identity_links",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="enterprise_identity_links",
+    )
+    subject = models.CharField(max_length=255)
+    email = models.EmailField(max_length=254)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_authenticated_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["identity_config", "subject"],
+                name="uniq_enterprise_identity_subject",
+            ),
+            models.UniqueConstraint(
+                fields=["identity_config", "user"],
+                name="uniq_enterprise_identity_user",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.identity_config_id}: {self.subject}"

@@ -68,6 +68,7 @@ urlpatterns = [
     path("auth/me/", views.me, name="me"),
     path("auth/sso/discover/", identity_api.discover, name="enterprise-identity-discover"),
     path("auth/sso/oidc/authorize/", identity_api.begin_oidc_authorization, name="enterprise-identity-oidc-authorize"),
+    path("auth/sso/oidc/callback/", identity_api.oidc_callback, name="enterprise-identity-oidc-callback"),
     path("enterprise-identity/", identity_api.configuration, name="enterprise-identity-configuration"),
     path("integrations/destinations/", integration_destination_api.destinations, name="integration-destinations"),
     path("integrations/destinations/<int:pk>/", integration_destination_api.destination_detail, name="integration-destination-detail"),

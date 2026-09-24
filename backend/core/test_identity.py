@@ -1,12 +1,19 @@
 import base64
 import hashlib
+from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
 from django.contrib.auth.models import User
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework.test import APIClient
 
-from .account_models import EnterpriseIdentityConfig, EnterpriseIdentityFlow, OrganizationMembership
+from .account_models import (
+    EnterpriseIdentityConfig,
+    EnterpriseIdentityFlow,
+    EnterpriseIdentityLink,
+    OrganizationMembership,
+)
 from .models import AuditEvent, Organization
 
 
@@ -232,3 +239,131 @@ class EnterpriseIdentityTests(TestCase):
         )
         self.assertEqual(response.status_code, 404)
         self.assertFalse(EnterpriseIdentityFlow.objects.exists())
+
+
+    def _begin_oidc(self, email="person@example.com"):
+        self.client.force_authenticate(user=None)
+        return self.client.post(
+            "/api/auth/sso/oidc/authorize/",
+            {"email": email},
+            format="json",
+        )
+
+    def test_oidc_callback_links_existing_workspace_user_and_consumes_flow_once(self):
+        self.assertEqual(self._configure_oidc().status_code, 200)
+        started = self._begin_oidc()
+        query = parse_qs(urlparse(started.data["authorization_url"]).query)
+        state = query["state"][0]
+        nonce = query["nonce"][0]
+
+        def validated_claims(config, code, verifier, redirect_uri):
+            self.assertEqual(code, "fake-code")
+            self.assertTrue(verifier)
+            self.assertTrue(redirect_uri.endswith("/api/auth/sso/oidc/callback/"))
+            return {
+                "iss": "https://idp.example.test/",
+                "aud": "finopser-test-client",
+                "sub": "provider-subject-123",
+                "nonce": nonce,
+                "email": self.member.email,
+                "email_verified": True,
+            }
+
+        with patch("core.identity_api.OIDC_CLAIMS_VALIDATOR", validated_claims):
+            response = self.client.post(
+                "/api/auth/sso/oidc/callback/",
+                {"state": state, "code": "fake-code"},
+                format="json",
+            )
+            replay = self.client.post(
+                "/api/auth/sso/oidc/callback/",
+                {"state": state, "code": "fake-code"},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["authenticated"])
+        self.assertEqual(response.data["id"], self.member.id)
+        link = EnterpriseIdentityLink.objects.get()
+        self.assertEqual(link.user, self.member)
+        self.assertEqual(link.subject, "provider-subject-123")
+        self.assertIsNotNone(link.last_authenticated_at)
+        self.assertIsNotNone(EnterpriseIdentityFlow.objects.get().consumed_at)
+        self.assertEqual(replay.status_code, 401)
+        self.assertEqual(EnterpriseIdentityLink.objects.count(), 1)
+
+    def test_oidc_callback_fails_closed_without_jit_or_on_invalid_claims(self):
+        self.assertEqual(self._configure_oidc().status_code, 200)
+        started = self._begin_oidc()
+        query = parse_qs(urlparse(started.data["authorization_url"]).query)
+        state = query["state"][0]
+        nonce = query["nonce"][0]
+
+        invalid_claim_sets = [
+            {
+                "iss": "https://wrong.example.test/",
+                "aud": "finopser-test-client",
+                "sub": "subject",
+                "nonce": nonce,
+                "email": self.member.email,
+                "email_verified": True,
+            },
+            {
+                "iss": "https://idp.example.test/",
+                "aud": "wrong-client",
+                "sub": "subject",
+                "nonce": nonce,
+                "email": self.member.email,
+                "email_verified": True,
+            },
+            {
+                "iss": "https://idp.example.test/",
+                "aud": "finopser-test-client",
+                "sub": "subject",
+                "nonce": "wrong-nonce",
+                "email": self.member.email,
+                "email_verified": True,
+            },
+            {
+                "iss": "https://idp.example.test/",
+                "aud": "finopser-test-client",
+                "sub": "subject",
+                "nonce": nonce,
+                "email": "unknown@example.com",
+                "email_verified": True,
+            },
+        ]
+        for claims in invalid_claim_sets:
+            with self.subTest(claims=claims):
+                with patch("core.identity_api.OIDC_CLAIMS_VALIDATOR", lambda *args, claims=claims: claims):
+                    response = self.client.post(
+                        "/api/auth/sso/oidc/callback/",
+                        {"state": state, "code": "fake-code"},
+                        format="json",
+                    )
+                self.assertEqual(response.status_code, 401)
+                self.assertFalse(EnterpriseIdentityLink.objects.exists())
+                self.assertIsNone(EnterpriseIdentityFlow.objects.get().consumed_at)
+
+    def test_oidc_callback_rejects_expired_state_and_default_validator(self):
+        self.assertEqual(self._configure_oidc().status_code, 200)
+        started = self._begin_oidc()
+        state = parse_qs(urlparse(started.data["authorization_url"]).query)["state"][0]
+
+        response = self.client.post(
+            "/api/auth/sso/oidc/callback/",
+            {"state": state, "code": "fake-code"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 401)
+        self.assertIsNone(EnterpriseIdentityFlow.objects.get().consumed_at)
+
+        EnterpriseIdentityFlow.objects.update(expires_at=timezone.now())
+        with patch("core.identity_api.OIDC_CLAIMS_VALIDATOR", lambda *args: {}):
+            expired = self.client.post(
+                "/api/auth/sso/oidc/callback/",
+                {"state": state, "code": "fake-code"},
+                format="json",
+            )
+        self.assertEqual(expired.status_code, 401)
+        self.assertFalse(EnterpriseIdentityLink.objects.exists())
