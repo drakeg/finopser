@@ -45,3 +45,20 @@ Persisted results are intentionally provider-neutral and sanitized. Success reco
 Execution request and completion are audited using execution id, provider label, and final status only. Executions do not mutate the original request approval or provisioning-plan intent.
 
 The default application remains incapable of AWS account creation because the installed adapter is disabled. Live AWS Organizations/CreateAccount or Control Tower integration remains outside the authorized boundary.
+
+
+## Slice 3 — Administration UX and acceptance hardening
+
+Administration now exposes the tenant's account-vending request lifecycle alongside provisioning-plan and execution-attempt state. The interface labels provisioning as disabled by default and states that the installed provider does not create an AWS account.
+
+For approved requests, the UI exposes only explicit actions: create a durable plan, then request an execution attempt. Pending requests expose manager approval. There is no automatic execution or retry path. Backend authorization remains authoritative; non-manager attempts still fail closed even if a client constructs a request manually.
+
+Plan presentation includes the disabled provider, live-provisioning flag, and deterministic baseline actions. Execution history presents only the sanitized status/provider/outcome metadata already exposed by the backend.
+
+Acceptance coverage verifies that repeated execution requires separate explicit requests, each attempt receives its own durable identity, disabled-provider results contain no exception details, history cannot cross tenant boundaries, and execution attempts do not mutate the provisioning-plan intent or enable live provisioning.
+
+## Sprint 29 acceptance
+
+Sprint 29 now provides request approval, deterministic preview, durable provisioning intent, an explicit provider-adapter execution boundary, sanitized execution history, and an administration workflow. The default adapter remains disabled, so the application is still incapable of live AWS account creation.
+
+Activating AWS Organizations/CreateAccount or Control Tower remains a separate future authorization decision and is not part of Sprint 29.
