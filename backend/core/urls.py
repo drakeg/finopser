@@ -104,6 +104,7 @@ urlpatterns = [
     path("account-vending/requests/<int:pk>/reject/", vending_api.reject, name="account-vending-reject"),
     path("account-vending/requests/<int:pk>/preview/", vending_api.preview, name="account-vending-preview"),
     path("account-vending/requests/<int:pk>/plan/", vending_api.provisioning_plan, name="account-vending-plan"),
+    path("account-vending/requests/<int:pk>/executions/", vending_api.provisioning_executions, name="account-vending-executions"),
     path("plans/", account_api.plan_catalog, name="plan-catalog"),
     path("billing/status/", billing_api.billing_status, name="billing-status"),
     path("billing/checkout/", billing_api.checkout, name="billing-checkout"),

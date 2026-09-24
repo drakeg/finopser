@@ -100,3 +100,38 @@ class AccountProvisioningPlan(models.Model):
 
     def __str__(self) -> str:
         return f"{self.vending_request}: plan"
+
+
+
+class AccountProvisioningExecution(models.Model):
+    class Status(models.TextChoices):
+        RUNNING = "running", "Running"
+        SUCCEEDED = "succeeded", "Succeeded"
+        FAILED = "failed", "Failed"
+
+    plan = models.ForeignKey(
+        AccountProvisioningPlan,
+        on_delete=models.CASCADE,
+        related_name="executions",
+    )
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="account_provisioning_executions",
+    )
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.RUNNING)
+    provider = models.CharField(max_length=32, default="disabled")
+    result = models.JSONField(default=dict)
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="requested_account_provisioning_executions",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+
+    def __str__(self) -> str:
+        return f"{self.plan_id}: {self.status}"
