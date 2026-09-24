@@ -7,8 +7,8 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from .account_models import OrganizationMembership
-from .report_models import ReportGeneration
 from .models import CloudAccount, CloudResource, CostRecord, Organization, OrganizationNode, Project
+from .report_models import ReportGeneration
 
 
 class ReportingFoundationTests(TestCase):
