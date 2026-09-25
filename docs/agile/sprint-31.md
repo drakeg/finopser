@@ -20,3 +20,12 @@ The product acceptance matrix records current evidence separately from historica
 ## Safety / cost gate
 
 No live AWS provisioning, provider credentials, paid services, production infrastructure, recurring spend, or automatic execution is introduced.
+
+
+## Slice 2 — Integrations administration restoration
+
+The acceptance audit found that the Sprint 23–27 backend integration capabilities remained intact while their React product surface was absent. Administration now loads the existing manager-scoped service-principal, API-token, webhook-destination, and notification-channel APIs and presents their safe persisted metadata.
+
+The UI deliberately models only persisted representations: token prefixes and signing-secret prefixes are visible, but plaintext API tokens and webhook signing secrets are not fields in normal list state. Copy-once secret issuance semantics therefore remain intact. Notification channels show their destination and subscribed event types without initiating delivery.
+
+This restoration does not introduce write API scopes, automatic external delivery, durable plaintext signing secrets, hosted gateways, production exposure, or live network delivery from CI. Backend RBAC and tenant scoping remain authoritative.
