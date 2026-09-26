@@ -29,3 +29,7 @@ The acceptance audit found that the Sprint 23–27 backend integration capabilit
 The UI deliberately models only persisted representations: token prefixes and signing-secret prefixes are visible, but plaintext API tokens and webhook signing secrets are not fields in normal list state. Copy-once secret issuance semantics therefore remain intact. Notification channels show their destination and subscribed event types without initiating delivery.
 
 This restoration does not introduce write API scopes, automatic external delivery, durable plaintext signing secrets, hosted gateways, production exposure, or live network delivery from CI. Backend RBAC and tenant scoping remain authoritative.
+
+## Slice 3 — Report-ready catalog regression
+
+The metadata-only report-ready producer now accepts both core and action-report definitions. Regression coverage verifies recommendations and remediation-history generation, excludes report content from delivery, and rejects unknown report codes. No automatic delivery or live transport was enabled.
