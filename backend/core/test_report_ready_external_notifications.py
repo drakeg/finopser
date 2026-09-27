@@ -94,3 +94,43 @@ class ReportReadyExternalNotificationTests(TestCase):
             ),
             [],
         )
+
+    def test_action_report_generations_emit_metadata_only(self):
+        for code in ("recommendations", "remediation-history"):
+            with self.subTest(report_code=code):
+                generation = ReportGeneration.objects.create(
+                    organization=self.organization,
+                    report_code=code,
+                    status=ReportGeneration.Status.SUCCEEDED,
+                    row_count=2,
+                    requested_by=self.user,
+                )
+                deliveries = dispatch_report_generation_ready(
+                    generation,
+                    signing_secret_for=self.secret_for,
+                    transport=self.transport,
+                    actor=self.user,
+                )
+                self.assertEqual(len(deliveries), 1)
+                self.assertEqual(deliveries[0].event_type, "report.ready")
+                body = self.calls[-1].body.decode()
+                self.assertIn(code, body)
+                self.assertNotIn("content", body.lower())
+                self.assertNotIn("csv", body.lower())
+        self.assertEqual(len(self.calls), 2)
+
+    def test_unknown_generation_report_fails_closed(self):
+        generation = ReportGeneration(
+            organization=self.organization,
+            report_code="unsupported-report",
+            status=ReportGeneration.Status.SUCCEEDED,
+            requested_by=self.user,
+        )
+        with self.assertRaisesRegex(ValueError, "Unknown report definition"):
+            dispatch_report_generation_ready(
+                generation,
+                signing_secret_for=self.secret_for,
+                transport=self.transport,
+                actor=self.user,
+            )
+        self.assertEqual(self.calls, [])

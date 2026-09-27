@@ -1,5 +1,6 @@
 from .notification_dispatch import dispatch_notification_event
 from .reporting import REPORT_CATALOG
+from .reporting_actions import ACTION_REPORT_CATALOG
 
 
 def budget_threshold_source_id(budget, snapshot) -> str:
@@ -102,7 +103,7 @@ def dispatch_report_ready(
     if not source_id:
         raise ValueError("Report source id is required")
     definition = report_result.get("report")
-    if definition is None or definition.code not in REPORT_CATALOG:
+    if definition is None or definition.code not in REPORT_CATALOG and definition.code not in ACTION_REPORT_CATALOG:
         raise ValueError("Unknown report definition")
     return dispatch_notification_event(
         organization,
@@ -211,7 +212,7 @@ def dispatch_remediation_lifecycle(
 
 
 def report_generation_notification_result(generation):
-    definition = REPORT_CATALOG.get(generation.report_code)
+    definition = REPORT_CATALOG.get(generation.report_code) or ACTION_REPORT_CATALOG.get(generation.report_code)
     if definition is None:
         raise ValueError("Unknown report definition")
     return {
