@@ -75,6 +75,9 @@ def complete_oidc_callback(state: str, code: str, validated_claims_for):
         elif not link.user.is_active or link.email.lower() != email:
             raise OIDCValidationError("OIDC identity link is invalid.")
 
+        if not config.organization.memberships.filter(user=link.user).exists():
+            raise OIDCValidationError("OIDC identity is outside the configured workspace.")
+
         flow.consumed_at = now
         flow.save(update_fields=["consumed_at"])
         link.last_authenticated_at = now

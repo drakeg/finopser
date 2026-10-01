@@ -292,6 +292,42 @@ class EnterpriseIdentityTests(TestCase):
         self.assertEqual(replay.status_code, 401)
         self.assertEqual(EnterpriseIdentityLink.objects.count(), 1)
 
+    def test_oidc_callback_rejects_existing_link_after_workspace_membership_removed(self):
+        self.assertEqual(self._configure_oidc().status_code, 200)
+        started = self._begin_oidc()
+        query = parse_qs(urlparse(started.data["authorization_url"]).query)
+        state = query["state"][0]
+        nonce = query["nonce"][0]
+
+        link = EnterpriseIdentityLink.objects.create(
+            identity_config=EnterpriseIdentityConfig.objects.get(organization=self.organization),
+            user=self.member,
+            subject="provider-subject-removed",
+            email=self.member.email,
+        )
+        previous_authenticated_at = link.last_authenticated_at
+        self.organization.memberships.filter(user=self.member).delete()
+
+        claims = {
+            "iss": "https://idp.example.test/",
+            "aud": "finopser-test-client",
+            "sub": link.subject,
+            "nonce": nonce,
+            "email": self.member.email,
+            "email_verified": True,
+        }
+        with patch("core.identity_api.OIDC_CLAIMS_VALIDATOR", lambda *args: claims):
+            response = self.client.post(
+                "/api/auth/sso/oidc/callback/",
+                {"state": state, "code": "fake-code"},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertIsNone(EnterpriseIdentityFlow.objects.get().consumed_at)
+        link.refresh_from_db()
+        self.assertEqual(link.last_authenticated_at, previous_authenticated_at)
+
     def test_oidc_callback_fails_closed_without_jit_or_on_invalid_claims(self):
         self.assertEqual(self._configure_oidc().status_code, 200)
         started = self._begin_oidc()
