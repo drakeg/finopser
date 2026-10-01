@@ -33,3 +33,9 @@ This restoration does not introduce write API scopes, automatic external deliver
 ## Slice 3 — Report-ready catalog regression
 
 The metadata-only report-ready producer now accepts both core and action-report definitions. Regression coverage verifies recommendations and remediation-history generation, excludes report content from delivery, and rejects unknown report codes. No automatic delivery or live transport was enabled.
+
+## Slice 5 — OIDC membership lifecycle hardening
+
+OIDC callbacks now revalidate current membership in the configured organization for both newly linked and previously linked identities. Removing a user from the workspace therefore revokes the existing OIDC authentication path without requiring deletion of the historical identity link. Denied callbacks fail closed before consuming the flow or updating the link authentication timestamp. Existing issuer, audience, subject, nonce, verified-email/domain, active-user, and linked-email checks remain unchanged.
+
+Focused identity regression coverage exercises the removed-membership path using the existing injected claims validator; no live identity provider or external network call is introduced.
