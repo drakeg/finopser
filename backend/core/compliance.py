@@ -127,7 +127,18 @@ def evaluate_compliance(actor=None):
                 "resource_type": resource.resource_type,
                 "region": resource.region,
             }
-            finding = ComplianceFinding.objects.filter(control=control, resource=resource).first()
+            finding = (
+                ComplianceFinding.objects.filter(
+                    control=control,
+                    resource=resource,
+                    status__in=[
+                        ComplianceFinding.Status.OPEN,
+                        ComplianceFinding.Status.EXCEPTED,
+                    ],
+                )
+                .order_by("-first_seen", "-id")
+                .first()
+            )
 
             if result == "unknown":
                 unknown += 1
