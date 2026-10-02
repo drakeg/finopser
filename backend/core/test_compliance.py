@@ -107,6 +107,39 @@ class ComplianceTests(APITestCase):
         self.assertEqual(finding.status, ComplianceFinding.Status.RESOLVED)
         self.assertIsNotNone(finding.resolved_at)
 
+    def test_recurring_failure_creates_new_finding_episode(self):
+        resource = self._resource(
+            "ec2:123456789012:us-east-1:i-recurring",
+            "aws.ec2.instance",
+            {"public_ip_address": "203.0.113.40"},
+        )
+        self.client.post("/api/compliance/evaluate/")
+        first = ComplianceFinding.objects.get(resource=resource)
+        first_seen = first.first_seen
+
+        resource.metadata = {"public_ip_address": ""}
+        resource.save(update_fields=["metadata"])
+        resolved = self.client.post("/api/compliance/evaluate/")
+        first.refresh_from_db()
+        self.assertEqual(resolved.data["resolved_count"], 1)
+        self.assertEqual(first.status, ComplianceFinding.Status.RESOLVED)
+        self.assertIsNotNone(first.resolved_at)
+
+        resource.metadata = {"public_ip_address": "203.0.113.41"}
+        resource.save(update_fields=["metadata"])
+        reopened = self.client.post("/api/compliance/evaluate/")
+
+        self.assertEqual(reopened.data["failed_count"], 1)
+        findings = ComplianceFinding.objects.filter(resource=resource).order_by("first_seen", "id")
+        self.assertEqual(findings.count(), 2)
+        historical, recurring = findings
+        self.assertEqual(historical.id, first.id)
+        self.assertEqual(historical.status, ComplianceFinding.Status.RESOLVED)
+        self.assertEqual(historical.first_seen, first_seen)
+        self.assertEqual(recurring.status, ComplianceFinding.Status.OPEN)
+        self.assertNotEqual(recurring.id, historical.id)
+        self.assertGreaterEqual(recurring.first_seen, historical.resolved_at)
+
     def test_active_exception_marks_failure_excepted(self):
         resource = self._resource(
             "ec2:123456789012:us-east-1:i-excepted",
