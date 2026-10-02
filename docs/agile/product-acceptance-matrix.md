@@ -9,7 +9,7 @@ This matrix is a living release-readiness check. A completed sprint means its ac
 | E003 Organizational hierarchy | organizations, nodes, projects and scoped APIs | Organization workspace | Verified |
 | E004–E007 AWS/account/inventory/cost | provider/account models, inventory and cost APIs | Accounts, Resources, Costs | Verified current self-hosted scope |
 | E008 Dashboard | operational summaries and attention signals | Dashboard | Verified |
-| E009–E010 Compliance/policies | findings, controls, policies and violations | Compliance, Policies | Verified |
+| E009–E010 Compliance/policies | findings, controls, policies and violations with distinct recurrence episodes | Compliance, Policies | **Lifecycle gap fixed in Sprint 31:** resolved findings remain historical and later failures create new episodes |
 | E011 Recommendations | recommendation lifecycle and evidence | Recommendations | Verified |
 | E012 Remediation | approval-gated execution boundary | Automation | Verified safe/default-disabled scope |
 | E013 Budgets | budgets, threshold evidence and notifications producer | Budgets | Verified |
