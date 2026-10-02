@@ -39,3 +39,9 @@ The metadata-only report-ready producer now accepts both core and action-report 
 OIDC callbacks now revalidate current membership in the configured organization for both newly linked and previously linked identities. Removing a user from the workspace therefore revokes the existing OIDC authentication path without requiring deletion of the historical identity link. Denied callbacks fail closed before consuming the flow or updating the link authentication timestamp. Existing issuer, audience, subject, nonce, verified-email/domain, active-user, and linked-email checks remain unchanged.
 
 Focused identity regression coverage exercises the removed-membership path using the existing injected claims validator; no live identity provider or external network call is introduced.
+
+## Slice 6 — Recurring compliance finding episodes
+
+Compliance evaluation now updates only the active open/excepted finding for a control/resource pair. Once an episode is resolved, it remains immutable historical lifecycle evidence; a later failure creates a new finding with a new identity and first-seen timestamp. This preserves separate violation episodes and allows the existing governance-finding source identity to distinguish a genuine recurrence while retaining delivery deduplication within one episode.
+
+Focused regression coverage exercises fail → pass/resolved → fail and verifies that the historical resolved record is preserved. Existing tenant scoping, exception handling, persisted-evidence evaluation, and safe notification boundaries remain unchanged.
