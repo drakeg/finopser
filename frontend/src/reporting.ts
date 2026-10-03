@@ -1,0 +1,7 @@
+export type ReportFilters={account:string;project:string;service:string;resource_type:string;active:string;status:string;severity:string;priority:string;category:string;simulation:string;start_date:string;end_date:string;action:string;object_type:string}
+export type ReportExportMetadata={report:string;generatedAt:string;rowCount:string;truncated:boolean}
+
+export const reportFilterKeys:Record<string,(keyof ReportFilters)[]>={'resource-inventory':['account','resource_type','active'],'cost-detail':['account','project','service','start_date','end_date'],'compliance-findings':['status','severity','account'],'policy-violations':['status','severity','account'],'recommendations':['status','priority','category','account'],'remediation-history':['status','simulation','account'],'audit-events':['action','object_type']}
+
+export function reportUrl(code:string,endpoint:string,filters:ReportFilters){const params=new URLSearchParams();for(const key of reportFilterKeys[code]??[]){const value=filters[key].trim();if(value)params.set(key,value)}const query=params.toString();return query?`${endpoint}?${query}`:endpoint}
+export function reportExportMetadata(headers:Headers,code:string):ReportExportMetadata{return{report:headers.get('X-Finopser-Report')??code,generatedAt:headers.get('X-Finopser-Generated-At')??'',rowCount:headers.get('X-Finopser-Row-Count')??'—',truncated:headers.get('X-Finopser-Truncated')==='true'}}

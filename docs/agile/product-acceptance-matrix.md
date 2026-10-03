@@ -4,7 +4,7 @@ This matrix is a living release-readiness check. A completed sprint means its ac
 
 | Epic | Current evidence | Product surface | Audit status |
 |---|---|---|---|
-| E001 Foundation | health/readiness, Docker Compose, configurable ports/origins, CI quality gates | local stack + CI | **Configuration gap fixed in Sprint 31:** Compose honors explicit LAN CORS/CSRF origin overrides while retaining localhost defaults |
+| E001 Foundation | health/readiness, Docker Compose, configurable ports/origins, backend/CLI/frontend regression tests, CI quality gates | local stack + CI | **Quality gaps fixed in Sprint 31:** Compose honors explicit LAN origin overrides and frontend CI now executes focused regression tests in addition to lint/build |
 | E002 Authentication & RBAC | session auth and server-side role checks | sign-in + protected APIs | Verified |
 | E003 Organizational hierarchy | organizations, nodes, projects and scoped APIs | Organization workspace | Verified |
 | E004–E007 AWS/account/inventory/cost | provider/account models, inventory and cost APIs | Accounts, Resources, Costs | Verified current self-hosted scope |
