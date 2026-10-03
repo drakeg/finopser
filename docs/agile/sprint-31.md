@@ -51,3 +51,9 @@ Focused regression coverage exercises fail → pass/resolved → fail and verifi
 Docker Compose now honors explicit CORS and CSRF trusted-origin values from `.env` instead of replacing them with localhost-only values. When no override is supplied, the backend retains localhost and 127.0.0.1 defaults derived from `APP_PORT`. The example environment documents the three settings needed for LAN access without embedding a private address, and CI renders Compose with explicit test origins to guard the precedence contract.
 
 Frontend/backend port configurability and the existing container topology are unchanged. This slice does not add public exposure, reverse-proxy deployment, TLS automation, or hosted infrastructure.
+
+## Slice 4 — Report filters and export metadata
+
+The Reports workspace now exposes the existing backend report filter dimensions through a compact shared filter surface. Each report uses an explicit parameter allowlist, so only filters supported by that endpoint are sent. CSV download behavior, backend tenant scoping, entitlement checks, synchronous row limits, and export auditing remain authoritative and unchanged.
+
+After a successful export, the UI surfaces the existing response metadata for report code, generated-at time, row count, and truncation state. The metadata is read before the CSV response becomes a browser download and no report content is persisted in UI state.
