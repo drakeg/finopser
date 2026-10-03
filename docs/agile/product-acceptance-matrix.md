@@ -14,7 +14,7 @@ This matrix is a living release-readiness check. A completed sprint means its ac
 | E012 Remediation | approval-gated execution boundary | Automation | Verified safe/default-disabled scope |
 | E013 Budgets | budgets, threshold evidence and notifications producer | Budgets | Verified |
 | E014 Notifications | channels, sanitized delivery history, injected transport | Administration/integrations | **UI regression restored in Sprint 31:** persisted channel/destination state is visible again; safe/default-no-network scope preserved |
-| E015 Reporting/export | catalog, CSV exports, schedule intent, explicit generation history | Reports | Verified current scope in Sprint 30 |
+| E015 Reporting/export | catalog, scoped CSV filters, export metadata, schedule intent, explicit generation history | Reports | **UI regression restored in Sprint 31:** backend-supported filters and export row/truncation/generated metadata are visible again |
 | E016 Audit/evidence | tenant-scoped audit events/integrity evidence | Administration/reports | Verified |
 | E017 Enterprise identity | discovery + local OIDC flow boundary, local password fallback | Sign-in | Verified safe/provider-neutral scope |
 | E018 AWS account vending | request/approve/reject backend, plan/execution boundary | Administration | **Gap fixed in Sprint 31:** Reject action was missing from UI |
