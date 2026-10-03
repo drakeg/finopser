@@ -57,3 +57,9 @@ Frontend/backend port configurability and the existing container topology are un
 The Reports workspace now exposes the existing backend report filter dimensions through a compact shared filter surface. Each report uses an explicit parameter allowlist, so only filters supported by that endpoint are sent. CSV download behavior, backend tenant scoping, entitlement checks, synchronous row limits, and export auditing remain authoritative and unchanged.
 
 After a successful export, the UI surfaces the existing response metadata for report code, generated-at time, row count, and truncation state. The metadata is read before the CSV response becomes a browser download and no report content is persisted in UI state.
+
+## Slice 8 — Focused frontend regression tests
+
+Frontend CI now has an executable regression-test command in addition to lint and build. Report query construction and export metadata parsing were extracted into a small dependency-free helper module and are covered with Node's built-in test runner using TypeScript type stripping. Coverage verifies per-report filter allowlists, omission of empty values, and parsing of report code/generated-at/row-count/truncation response headers.
+
+This adds no browser automation, hosted test service, runtime dependency, external delivery, or production infrastructure. Backend authorization and tenant enforcement remain unchanged.
