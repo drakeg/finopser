@@ -34,6 +34,24 @@ This restoration does not introduce write API scopes, automatic external deliver
 
 The metadata-only report-ready producer now accepts both core and action-report definitions. Regression coverage verifies recommendations and remediation-history generation, excludes report content from delivery, and rejects unknown report codes. No automatic delivery or live transport was enabled.
 
+## Slice 5 — OIDC membership lifecycle hardening
+
+OIDC callbacks now revalidate current membership in the configured organization for both newly linked and previously linked identities. Removing a user from the workspace therefore revokes the existing OIDC authentication path without requiring deletion of the historical identity link. Denied callbacks fail closed before consuming the flow or updating the link authentication timestamp. Existing issuer, audience, subject, nonce, verified-email/domain, active-user, and linked-email checks remain unchanged.
+
+Focused identity regression coverage exercises the removed-membership path using the existing injected claims validator; no live identity provider or external network call is introduced.
+
+## Slice 6 — Recurring compliance finding episodes
+
+Compliance evaluation now updates only the active open/excepted finding for a control/resource pair. Once an episode is resolved, it remains immutable historical lifecycle evidence; a later failure creates a new finding with a new identity and first-seen timestamp. This preserves separate violation episodes and allows the existing governance-finding source identity to distinguish a genuine recurrence while retaining delivery deduplication within one episode.
+
+Focused regression coverage exercises fail → pass/resolved → fail and verifies that the historical resolved record is preserved. Existing tenant scoping, exception handling, persisted-evidence evaluation, and safe notification boundaries remain unchanged.
+
+## Slice 7 — Docker Compose LAN origin overrides
+
+Docker Compose now honors explicit CORS and CSRF trusted-origin values from `.env` instead of replacing them with localhost-only values. When no override is supplied, the backend retains localhost and 127.0.0.1 defaults derived from `APP_PORT`. The example environment documents the three settings needed for LAN access without embedding a private address, and CI renders Compose with explicit test origins to guard the precedence contract.
+
+Frontend/backend port configurability and the existing container topology are unchanged. This slice does not add public exposure, reverse-proxy deployment, TLS automation, or hosted infrastructure.
+
 ## Slice 4 — Report filters and export metadata
 
 The Reports workspace now exposes the existing backend report filter dimensions through a compact shared filter surface. Each report uses an explicit parameter allowlist, so only filters supported by that endpoint are sent. CSV download behavior, backend tenant scoping, entitlement checks, synchronous row limits, and export auditing remain authoritative and unchanged.
