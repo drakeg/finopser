@@ -29,7 +29,7 @@
 | E016 | Audit & Evidence | P0 | Immutable application audit events for privileged and governance-relevant changes. |
 | E017 | Enterprise Identity | P2 | OIDC/SAML/SSO and enterprise identity lifecycle. |
 | E018 | AWS Account Vending | P2 | Controlled AWS account provisioning and baseline application. |
-| E019 | Azure Provider | P3 | Azure provider implementation behind the shared provider interfaces. |
+| E019 | Azure Provider | P3 | **Sprint 32 foundation started:** Azure is represented in the provider vocabulary while live validation/discovery/cost support remains intentionally unimplemented behind the shared provider registry. |
 | E020 | GCP Provider | P3 | GCP provider implementation behind the shared provider interfaces. |
 | E021 | OCI Provider | P3 | OCI provider implementation behind the shared provider interfaces. |
 | E022 | Public API / CLI / Integrations | P2 | Stable external APIs, CLI, and automation integrations. |
