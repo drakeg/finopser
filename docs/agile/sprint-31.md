@@ -33,3 +33,9 @@ This restoration does not introduce write API scopes, automatic external deliver
 ## Slice 3 — Report-ready catalog regression
 
 The metadata-only report-ready producer now accepts both core and action-report definitions. Regression coverage verifies recommendations and remediation-history generation, excludes report content from delivery, and rejects unknown report codes. No automatic delivery or live transport was enabled.
+
+## Slice 4 — Report filters and export metadata
+
+The Reports workspace now exposes the existing backend report filter dimensions through a compact shared filter surface. Each report uses an explicit parameter allowlist, so only filters supported by that endpoint are sent. CSV download behavior, backend tenant scoping, entitlement checks, synchronous row limits, and export auditing remain authoritative and unchanged.
+
+After a successful export, the UI surfaces the existing response metadata for report code, generated-at time, row count, and truncation state. The metadata is read before the CSV response becomes a browser download and no report content is persisted in UI state.
