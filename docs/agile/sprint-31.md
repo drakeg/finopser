@@ -45,3 +45,9 @@ Focused identity regression coverage exercises the removed-membership path using
 Compliance evaluation now updates only the active open/excepted finding for a control/resource pair. Once an episode is resolved, it remains immutable historical lifecycle evidence; a later failure creates a new finding with a new identity and first-seen timestamp. This preserves separate violation episodes and allows the existing governance-finding source identity to distinguish a genuine recurrence while retaining delivery deduplication within one episode.
 
 Focused regression coverage exercises fail → pass/resolved → fail and verifies that the historical resolved record is preserved. Existing tenant scoping, exception handling, persisted-evidence evaluation, and safe notification boundaries remain unchanged.
+
+## Slice 7 — Docker Compose LAN origin overrides
+
+Docker Compose now honors explicit CORS and CSRF trusted-origin values from `.env` instead of replacing them with localhost-only values. When no override is supplied, the backend retains localhost and 127.0.0.1 defaults derived from `APP_PORT`. The example environment documents the three settings needed for LAN access without embedding a private address, and CI renders Compose with explicit test origins to guard the precedence contract.
+
+Frontend/backend port configurability and the existing container topology are unchanged. This slice does not add public exposure, reverse-proxy deployment, TLS automation, or hosted infrastructure.
