@@ -53,6 +53,7 @@ class Project(models.Model):
 class CloudAccount(models.Model):
     class Provider(models.TextChoices):
         AWS = "aws", "Amazon Web Services"
+        AZURE = "azure", "Microsoft Azure"
 
     class Status(models.TextChoices):
         UNVALIDATED = "unvalidated", "Unvalidated"
