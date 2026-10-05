@@ -68,13 +68,11 @@ class CloudProvider(Protocol):
 
     def discover_resources(
         self,
-        self,
         connection: ProviderConnection,
     ) -> DiscoveryResult:
         ...
 
     def fetch_costs(
-        self,
         self,
         connection: ProviderConnection,
         *,
