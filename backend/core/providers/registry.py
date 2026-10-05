@@ -2,6 +2,7 @@ from collections.abc import Callable
 
 from .aws import AWSProvider
 from .aws_costs import fetch_aws_costs
+from .azure import AzureProvider
 from .base import CloudProvider, ProviderConnection
 
 
@@ -18,7 +19,7 @@ class AWSFinOpsProvider(AWSProvider):
 
 
 ProviderFactory = Callable[[], CloudProvider]
-_PROVIDER_FACTORIES: dict[str, ProviderFactory] = {"aws": AWSFinOpsProvider}
+_PROVIDER_FACTORIES: dict[str, ProviderFactory] = {"aws": AWSFinOpsProvider, "azure": AzureProvider}
 
 
 def register_provider(name: str, factory: ProviderFactory) -> None:
