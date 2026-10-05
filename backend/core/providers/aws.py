@@ -6,6 +6,7 @@ from .base import (
     DiscoveryResult,
     ProviderDiscoveryError,
     ProviderValidationError,
+    ProviderConnection,
     ResourceRecord,
     ValidationResult,
 )
@@ -50,7 +51,10 @@ class AWSProvider:
             return str(exc.response.get("Error", {}).get("Code", "ClientError"))
         return exc.__class__.__name__
 
-    def validate_account(self, *, account_id: str, role_arn: str, external_id: str = "") -> ValidationResult:
+    def validate_connection(self, connection: ProviderConnection) -> ValidationResult:
+        account_id = connection.provider_account_id
+        role_arn = connection.auth.get("role_arn", "")
+        external_id = connection.auth.get("external_id", "")
         try:
             credentials = self._assume_credentials(
                 role_arn=role_arn,
@@ -84,13 +88,10 @@ class AWSProvider:
             metadata={"user_id": str(identity.get("UserId", ""))},
         )
 
-    def discover_resources(
-        self,
-        *,
-        account_id: str,
-        role_arn: str,
-        external_id: str = "",
-    ) -> DiscoveryResult:
+    def discover_resources(self, connection: ProviderConnection) -> DiscoveryResult:
+        account_id = connection.provider_account_id
+        role_arn = connection.auth.get("role_arn", "")
+        external_id = connection.auth.get("external_id", "")
         try:
             session = self._assumed_session(
                 role_arn=role_arn,
