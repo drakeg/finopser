@@ -5,6 +5,7 @@ from django.test import SimpleTestCase
 
 from .providers.azure import AzureProvider
 from .providers.base import ProviderConnection, ProviderCostError, ProviderValidationError
+from .providers.registry import get_provider
 
 
 class FakeAzureAdapter:
@@ -45,3 +46,12 @@ class AzureProviderTests(SimpleTestCase):
             def costs(self,*args): raise RuntimeError("secret provider detail")
         with self.assertRaisesMessage(ProviderCostError,"Azure cost retrieval failed: RuntimeError"):
             AzureProvider(Broken()).fetch_costs(self.connection,start_date=date(2026,10,1),end_date=date(2026,10,2))
+
+
+class AzureProviderRegistrationTests(SimpleTestCase):
+    def test_registry_returns_fail_closed_azure_provider(self):
+        provider=get_provider("azure")
+        self.assertIsInstance(provider,AzureProvider)
+        connection=ProviderConnection(provider_account_id="sub-123",auth={})
+        with self.assertRaisesMessage(ProviderValidationError,"Azure validation failed: ProviderValidationError"):
+            provider.validate_connection(connection)
