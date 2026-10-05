@@ -53,5 +53,5 @@ class AzureProviderRegistrationTests(SimpleTestCase):
         provider=get_provider("azure")
         self.assertIsInstance(provider,AzureProvider)
         connection=ProviderConnection(provider_account_id="sub-123",auth={})
-        with self.assertRaisesMessage(ProviderValidationError,"Azure validation failed: ProviderValidationError"):
+        with self.assertRaisesMessage(ProviderValidationError,"Azure provider adapter is not configured"):
             provider.validate_connection(connection)
