@@ -4,9 +4,9 @@ from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
 
 from .base import (
     DiscoveryResult,
+    ProviderConnection,
     ProviderDiscoveryError,
     ProviderValidationError,
-    ProviderConnection,
     ResourceRecord,
     ValidationResult,
 )
