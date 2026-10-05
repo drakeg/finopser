@@ -44,6 +44,8 @@ class AzureProvider:
     def validate_connection(self, connection: ProviderConnection) -> ValidationResult:
         try:
             subscription = self.adapter.subscription(connection.provider_account_id, connection.auth)
+        except ProviderValidationError:
+            raise
         except Exception as exc:
             raise ProviderValidationError(f"Azure validation failed: {exc.__class__.__name__}") from exc
         actual_id = str(subscription.get("subscription_id", ""))
