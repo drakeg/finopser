@@ -25,3 +25,11 @@ The shared provider protocol now accepts a `ProviderConnection` containing a pro
 ## Slice 3 — Injected Azure provider boundary
 
 An Azure provider now implements the normalized validation, inventory, and cost contracts through an injected adapter protocol. It normalizes subscription identity, Azure resource records, and cost records into the existing provider-neutral result types and sanitizes adapter failures before exposing them to callers. The default provider registry intentionally does not register Azure yet, so no Azure network behavior can occur without a future explicit runtime adapter/configuration slice.
+
+## Slice 2 — Azure validation adapter boundary
+
+Azure is now registered through the shared provider registry with a deliberately disabled default adapter. The provider can be exercised with injected local adapters for subscription validation, normalized inventory, and normalized cost records, while an ordinary registry lookup cannot initiate Azure network traffic or require credentials. Validation preserves safe fail-closed configuration errors and rejects subscription identity mismatches.
+
+The existing onboarding API remains AWS-specific until a later slice introduces a provider-aware, non-secret connection model; Azure is not exposed through the AWS role-ARN workflow.
+
+No Azure SDK, live credentials, external network calls, cloud mutation, hosted infrastructure, paid services, or recurring spend are introduced by this slice.
