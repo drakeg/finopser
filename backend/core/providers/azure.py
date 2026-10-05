@@ -21,11 +21,25 @@ class AzureAdapter(Protocol):
     def costs(self, subscription_id: str, auth: dict[str, str], start_date: date, end_date: date) -> list[dict]: ...
 
 
+class DisabledAzureAdapter:
+    def _unavailable(self):
+        raise ProviderValidationError("Azure provider adapter is not configured")
+
+    def subscription(self, subscription_id: str, auth: dict[str, str]) -> dict:
+        self._unavailable()
+
+    def resources(self, subscription_id: str, auth: dict[str, str]) -> list[dict]:
+        raise ProviderDiscoveryError("Azure provider adapter is not configured")
+
+    def costs(self, subscription_id: str, auth: dict[str, str], start_date: date, end_date: date) -> list[dict]:
+        raise ProviderCostError("Azure provider adapter is not configured")
+
+
 class AzureProvider:
     name = "azure"
 
-    def __init__(self, adapter: AzureAdapter):
-        self.adapter = adapter
+    def __init__(self, adapter: AzureAdapter | None = None):
+        self.adapter = adapter or DisabledAzureAdapter()
 
     def validate_connection(self, connection: ProviderConnection) -> ValidationResult:
         try:
