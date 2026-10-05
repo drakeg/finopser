@@ -1,8 +1,8 @@
 from .base import (
     CloudProvider,
     DiscoveryResult,
-    ProviderDiscoveryError,
     ProviderConnection,
+    ProviderDiscoveryError,
     ProviderValidationError,
     ResourceRecord,
     ValidationResult,
