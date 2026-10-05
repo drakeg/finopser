@@ -2,7 +2,7 @@ from django.utils import timezone
 
 from .models import CloudResource, InventorySync
 from .notifications import notify
-from .providers import ProviderDiscoveryError, get_provider
+from .providers import ProviderConnection, ProviderDiscoveryError, get_provider
 
 
 def _notify_sync_issue(account, sync):
@@ -31,11 +31,7 @@ def sync_inventory(account) -> InventorySync:
 
     provider = get_provider(account.provider)
     try:
-        result = provider.discover_resources(
-            account_id=account.provider_account_id,
-            role_arn=account.role_arn,
-            external_id=account.external_id,
-        )
+        result = provider.discover_resources(ProviderConnection(provider_account_id=account.provider_account_id, auth={"role_arn": account.role_arn, "external_id": account.external_id}))
     except ProviderDiscoveryError as exc:
         sync.status = InventorySync.Status.FAILED
         sync.completed_at = timezone.now()
