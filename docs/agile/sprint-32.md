@@ -21,3 +21,7 @@ No Azure/GCP/OCI SDK calls, credentials, resource discovery, cost retrieval, mut
 ## Slice 2 — Provider-neutral connection contract
 
 The shared provider protocol now accepts a `ProviderConnection` containing a provider account identifier and opaque provider-specific authentication values. Existing AWS account records remain unchanged; validation, inventory, and cost call sites adapt the stored role ARN/external ID into the neutral contract at the provider boundary. AWS behavior is regression-tested through injected mocks and no live provider network calls are added.
+
+## Slice 3 — Injected Azure provider boundary
+
+An Azure provider now implements the normalized validation, inventory, and cost contracts through an injected adapter protocol. It normalizes subscription identity, Azure resource records, and cost records into the existing provider-neutral result types and sanitizes adapter failures before exposing them to callers. The default provider registry intentionally does not register Azure yet, so no Azure network behavior can occur without a future explicit runtime adapter/configuration slice.
