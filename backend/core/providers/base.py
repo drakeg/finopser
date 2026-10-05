@@ -5,6 +5,12 @@ from typing import Protocol
 
 
 @dataclass(frozen=True)
+class ProviderConnection:
+    provider_account_id: str
+    auth: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class ValidationResult:
     provider_account_id: str
     arn: str
@@ -57,25 +63,20 @@ class ProviderCostError(Exception):
 
 
 class CloudProvider(Protocol):
-    def validate_account(self, *, account_id: str, role_arn: str, external_id: str = "") -> ValidationResult:
+    def validate_connection(self, connection: ProviderConnection) -> ValidationResult:
         ...
 
     def discover_resources(
         self,
-        *,
-        account_id: str,
-        role_arn: str,
-        external_id: str = "",
+        connection: ProviderConnection,
     ) -> DiscoveryResult:
         ...
 
     def fetch_costs(
         self,
+        connection: ProviderConnection,
         *,
-        account_id: str,
-        role_arn: str,
         start_date: date,
         end_date: date,
-        external_id: str = "",
     ) -> CostResult:
         ...

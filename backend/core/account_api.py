@@ -25,7 +25,7 @@ from .models import (
     OrganizationNode,
     Project,
 )
-from .providers import ProviderValidationError, get_provider
+from .providers import ProviderConnection, ProviderValidationError, get_provider
 
 
 PLAN_CATALOG = [
@@ -269,11 +269,7 @@ def validate_cloud_account(request, pk: int):
         return Response({"detail": "Cloud account not found."}, status=status.HTTP_404_NOT_FOUND)
     provider = get_provider(account.provider)
     try:
-        result = provider.validate_account(
-            account_id=account.provider_account_id,
-            role_arn=account.role_arn,
-            external_id=account.external_id,
-        )
+        result = provider.validate_connection(ProviderConnection(provider_account_id=account.provider_account_id, auth={"role_arn": account.role_arn, "external_id": account.external_id}))
     except ProviderValidationError as exc:
         account.status = CloudAccount.Status.INVALID
         account.last_validated_at = timezone.now()

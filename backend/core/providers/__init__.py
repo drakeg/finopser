@@ -1,6 +1,7 @@
 from .base import (
     CloudProvider,
     DiscoveryResult,
+    ProviderConnection,
     ProviderDiscoveryError,
     ProviderValidationError,
     ResourceRecord,
@@ -12,6 +13,7 @@ __all__ = [
     "CloudProvider",
     "DiscoveryResult",
     "ProviderDiscoveryError",
+    "ProviderConnection",
     "ProviderValidationError",
     "ResourceRecord",
     "ValidationResult",

@@ -2,12 +2,19 @@ from collections.abc import Callable
 
 from .aws import AWSProvider
 from .aws_costs import fetch_aws_costs
-from .base import CloudProvider
+from .base import CloudProvider, ProviderConnection
 
 
 class AWSFinOpsProvider(AWSProvider):
-    def fetch_costs(self, **kwargs):
-        return fetch_aws_costs(self, **kwargs)
+    def fetch_costs(self, connection: ProviderConnection, *, start_date, end_date):
+        return fetch_aws_costs(
+            self,
+            account_id=connection.provider_account_id,
+            role_arn=connection.auth.get("role_arn", ""),
+            external_id=connection.auth.get("external_id", ""),
+            start_date=start_date,
+            end_date=end_date,
+        )
 
 
 ProviderFactory = Callable[[], CloudProvider]

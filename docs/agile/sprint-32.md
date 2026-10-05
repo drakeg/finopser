@@ -17,3 +17,7 @@ No Azure/GCP/OCI SDK calls, credentials, resource discovery, cost retrieval, mut
 ## Tracking
 - #162 — Sprint 32: Multi-cloud provider foundation
 - #163 — Slice 1: Generalize provider contract and registry
+
+## Slice 2 — Provider-neutral connection contract
+
+The shared provider protocol now accepts a `ProviderConnection` containing a provider account identifier and opaque provider-specific authentication values. Existing AWS account records remain unchanged; validation, inventory, and cost call sites adapt the stored role ARN/external ID into the neutral contract at the provider boundary. AWS behavior is regression-tested through injected mocks and no live provider network calls are added.

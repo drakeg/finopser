@@ -3,7 +3,7 @@ from django.utils import timezone
 
 from .models import CloudAccount, CostRecord, CostSync
 from .notifications import notify
-from .providers import get_provider
+from .providers import ProviderConnection, get_provider
 from .providers.base import ProviderCostError
 
 
@@ -33,13 +33,7 @@ def sync_costs(account: CloudAccount, *, start_date, end_date) -> CostSync:
     )
     provider = get_provider(account.provider)
     try:
-        result = provider.fetch_costs(
-            account_id=account.provider_account_id,
-            role_arn=account.role_arn,
-            external_id=account.external_id,
-            start_date=start_date,
-            end_date=end_date,
-        )
+        result = provider.fetch_costs(ProviderConnection(provider_account_id=account.provider_account_id, auth={"role_arn": account.role_arn, "external_id": account.external_id}), start_date=start_date, end_date=end_date)
     except ProviderCostError as exc:
         sync.status = CostSync.Status.FAILED
         sync.errors = [str(exc)[:255]]
