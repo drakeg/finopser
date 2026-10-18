@@ -108,7 +108,7 @@ class CloudAccountSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         provider = attrs.get("provider") or getattr(self.instance, "provider", CloudAccount.Provider.AWS)
         if provider != CloudAccount.Provider.AWS:
-            raise serializers.ValidationError({"provider": "AWS is the only supported provider in Sprint 4."})
+            raise serializers.ValidationError({"provider": "Azure onboarding is not configured; only AWS account connections are currently supported."})
         organization = attrs.get("organization") or getattr(self.instance, "organization", None)
         project = attrs.get("project") if "project" in attrs else getattr(self.instance, "project", None)
         if project and organization and project.organization_id != organization.id:
