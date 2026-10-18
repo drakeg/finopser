@@ -267,6 +267,11 @@ def validate_cloud_account(request, pk: int):
         account = CloudAccount.objects.get(pk=pk, organization=organization)
     except CloudAccount.DoesNotExist:
         return Response({"detail": "Cloud account not found."}, status=status.HTTP_404_NOT_FOUND)
+    if account.provider != CloudAccount.Provider.AWS:
+        return Response(
+            {"detail": "Azure onboarding is not configured; validation is unavailable."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
     provider = get_provider(account.provider)
     try:
         result = provider.validate_connection(ProviderConnection(provider_account_id=account.provider_account_id, auth={"role_arn": account.role_arn, "external_id": account.external_id}))
