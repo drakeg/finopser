@@ -33,3 +33,7 @@ Azure is now registered through the shared provider registry with a deliberately
 The existing onboarding API remains AWS-specific until a later slice introduces a provider-aware, non-secret connection model; Azure is not exposed through the AWS role-ARN workflow.
 
 No Azure SDK, live credentials, external network calls, cloud mutation, hosted infrastructure, paid services, or recurring spend are introduced by this slice.
+
+## Slice 4 — Fail-closed onboarding guard
+
+Azure accounts remain unavailable through the AWS-only onboarding path until a dedicated, secure connection flow is implemented. Unsupported account validation returns a controlled 400 instead of triggering an unconfigured provider adapter; serializer messaging reflects the current rollout state. No live cloud calls or credential storage are introduced.
