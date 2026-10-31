@@ -56,6 +56,10 @@ docker compose exec backend python manage.py createsuperuser
 
 The API session endpoint is available at `/api/auth/session/`.
 
+## Python runtime compatibility
+
+The backend container and CI use Python 3.15. For local backend development, use Python 3.15 and install `backend/requirements-dev.txt`. The pinned `psycopg[binary]==3.3.6` includes binary distributions compatible with this runtime; the previous 3.2.9 pin cannot be installed under Python 3.15.
+
 ## Run the quality gate
 
 Before opening or updating a pull request, run:
