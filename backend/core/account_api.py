@@ -1,3 +1,4 @@
+import re
 from datetime import timedelta
 
 from django.db import transaction
@@ -214,6 +215,11 @@ def connect_cloud_account(request):
             },
             status=status.HTTP_402_PAYMENT_REQUIRED,
         )
+    if request.data.get("provider", CloudAccount.Provider.AWS) != CloudAccount.Provider.AWS:
+        return Response({"detail": "Azure onboarding is not configured; only AWS connections are supported."}, status=status.HTTP_400_BAD_REQUEST)
+    forbidden = {"access_key", "secret_key", "session_token", "aws_access_key_id", "aws_secret_access_key", "aws_session_token", "client_secret"}
+    if forbidden.intersection(request.data.keys()):
+        return Response({"detail": "Long-lived cloud credentials are not accepted."}, status=status.HTTP_400_BAD_REQUEST)
     name = str(request.data.get("name", "")).strip()
     account_id = str(request.data.get("provider_account_id", "")).strip()
     role_arn = str(request.data.get("role_arn", "")).strip()
@@ -228,6 +234,10 @@ def connect_cloud_account(request):
             {"detail": "AWS account ID must be exactly 12 digits."},
             status=status.HTTP_400_BAD_REQUEST,
         )
+    if not re.fullmatch(r"arn:(aws|aws-us-gov|aws-cn):iam::\d{12}:role/.+", role_arn):
+        return Response({"detail": "Enter a valid AWS IAM role ARN."}, status=status.HTTP_400_BAD_REQUEST)
+    if role_arn.split(":")[4] != account_id:
+        return Response({"detail": "Role ARN must belong to the specified AWS account."}, status=status.HTTP_400_BAD_REQUEST)
     if CloudAccount.objects.filter(provider="aws", provider_account_id=account_id).exists():
         return Response(
             {"detail": "That AWS account is already connected."},
