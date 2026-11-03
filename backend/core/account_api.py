@@ -1,4 +1,5 @@
 import re
+import uuid
 from datetime import timedelta
 
 from django.db import transaction
@@ -214,6 +215,48 @@ def connect_cloud_account(request):
                 "upgrade_required": True,
             },
             status=status.HTTP_402_PAYMENT_REQUIRED,
+        )
+    if request.data.get("provider") == CloudAccount.Provider.AZURE:
+        # Registration only: no credentials, SDK calls, or implicit validation.
+        allowed = {"provider", "name", "provider_account_id", "tenant_id"}
+        if set(request.data.keys()) - allowed:
+            return Response(
+                {"detail": "Azure registration accepts identifiers only, not credentials or AWS fields."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        name = str(request.data.get("name", "")).strip()
+        try:
+            subscription_id = str(uuid.UUID(str(request.data.get("provider_account_id", ""))))
+            tenant_id = str(uuid.UUID(str(request.data.get("tenant_id", ""))))
+        except (ValueError, AttributeError, TypeError):
+            return Response(
+                {"detail": "Valid Azure subscription and tenant UUIDs are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not name:
+            return Response({"detail": "Account name is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if CloudAccount.objects.filter(provider=CloudAccount.Provider.AZURE, provider_account_id=subscription_id).exists():
+            return Response({"detail": "That Azure subscription is already registered."}, status=status.HTTP_400_BAD_REQUEST)
+        project = Project.objects.filter(organization=organization).order_by("id").first()
+        account = CloudAccount.objects.create(
+            provider=CloudAccount.Provider.AZURE,
+            organization=organization,
+            project=project,
+            name=name,
+            provider_account_id=subscription_id,
+            role_arn="",
+            metadata={"tenant_id": tenant_id},
+            status=CloudAccount.Status.UNVALIDATED,
+        )
+        profile = _profile(request.user)
+        profile.current_step = OnboardingProfile.Step.VALIDATE
+        profile.save(update_fields=["current_step", "updated_at"])
+        record_audit(request.user, "onboarding.cloud_account.create", account)
+        return Response(
+            {"id": account.id, "name": account.name, "provider": account.provider,
+             "provider_account_id": account.provider_account_id, "status": account.status,
+             "next_step": profile.current_step},
+            status=status.HTTP_201_CREATED,
         )
     if request.data.get("provider", CloudAccount.Provider.AWS) != CloudAccount.Provider.AWS:
         return Response({"detail": "Azure onboarding is not configured; only AWS connections are supported."}, status=status.HTTP_400_BAD_REQUEST)
