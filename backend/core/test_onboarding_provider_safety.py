@@ -42,3 +42,61 @@ class CloudAccountOnboardingSafetyTests(TestCase):
         response = self.post(role_arn="not-a-role")
         self.assertEqual(response.status_code, 400)
         self.assertEqual(CloudAccount.objects.count(), 0)
+
+    def test_registers_azure_intent_without_credentials_or_validation(self):
+        response = self.post(
+            provider="azure",
+            provider_account_id="11111111-1111-1111-1111-111111111111",
+            tenant_id="22222222-2222-2222-2222-222222222222",
+            role_arn=None,
+        )
+        # AWS role fields are forbidden, even when explicitly null.
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(CloudAccount.objects.count(), 0)
+
+        payload = {
+            "provider": "azure",
+            "name": "Azure test",
+            "provider_account_id": "11111111-1111-1111-1111-111111111111",
+            "tenant_id": "22222222-2222-2222-2222-222222222222",
+        }
+        request = APIRequestFactory().post("/api/onboarding/cloud-account/", payload, format="json")
+        force_authenticate(request, user=self.user)
+        response = connect_cloud_account(request)
+        self.assertEqual(response.status_code, 201)
+        account = CloudAccount.objects.get()
+        self.assertEqual(account.provider, CloudAccount.Provider.AZURE)
+        self.assertEqual(account.status, CloudAccount.Status.UNVALIDATED)
+        self.assertEqual(account.role_arn, "")
+        self.assertEqual(account.metadata["tenant_id"], payload["tenant_id"])
+
+    def test_azure_rejects_credentials_and_bad_identifiers(self):
+        for changes in (
+            {"client_secret": "do-not-store"},
+            {"provider_account_id": "not-a-uuid"},
+            {"tenant_id": "not-a-uuid"},
+        ):
+            payload = {
+                "provider": "azure",
+                "name": "Azure test",
+                "provider_account_id": "11111111-1111-1111-1111-111111111111",
+                "tenant_id": "22222222-2222-2222-2222-222222222222",
+                **changes,
+            }
+            request = APIRequestFactory().post("/api/onboarding/cloud-account/", payload, format="json")
+            force_authenticate(request, user=self.user)
+            self.assertEqual(connect_cloud_account(request).status_code, 400)
+        self.assertEqual(CloudAccount.objects.count(), 0)
+
+    def test_duplicate_azure_subscription_is_rejected(self):
+        payload = {
+            "provider": "azure",
+            "name": "Azure test",
+            "provider_account_id": "11111111-1111-1111-1111-111111111111",
+            "tenant_id": "22222222-2222-2222-2222-222222222222",
+        }
+        for expected in (201, 400):
+            request = APIRequestFactory().post("/api/onboarding/cloud-account/", payload, format="json")
+            force_authenticate(request, user=self.user)
+            self.assertEqual(connect_cloud_account(request).status_code, expected)
+        self.assertEqual(CloudAccount.objects.count(), 1)
