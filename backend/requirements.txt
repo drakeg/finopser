@@ -6,4 +6,4 @@ redis==8.1.0
 gunicorn==26.2.0
 django-cors-headers==4.9.0
 python-json-logger==4.2.0
-boto3==1.43.123
+boto3==1.43.126
