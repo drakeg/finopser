@@ -360,6 +360,13 @@ def initial_sync(request, pk: int):
         account = CloudAccount.objects.get(pk=pk, organization=organization)
     except CloudAccount.DoesNotExist:
         return Response({"detail": "Cloud account not found."}, status=status.HTTP_404_NOT_FOUND)
+    # Azure is registration-only until a real authenticated adapter is enabled.
+    # Never dispatch sync based solely on a persisted status flag.
+    if account.provider != CloudAccount.Provider.AWS:
+        return Response(
+            {"detail": "Azure inventory and cost synchronization are not configured."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
     if account.status != CloudAccount.Status.VALID:
         return Response(
             {"detail": "Validate the cloud account before the initial sync."},

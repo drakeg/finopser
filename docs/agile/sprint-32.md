@@ -26,7 +26,7 @@ The shared provider protocol now accepts a `ProviderConnection` containing a pro
 
 An Azure provider now implements the normalized validation, inventory, and cost contracts through an injected adapter protocol. It normalizes subscription identity, Azure resource records, and cost records into the existing provider-neutral result types and sanitizes adapter failures before exposing them to callers. The default provider registry intentionally does not register Azure yet, so no Azure network behavior can occur without a future explicit runtime adapter/configuration slice.
 
-## Slice 2 — Azure validation adapter boundary
+## Slice 3b — Azure validation adapter boundary
 
 Azure is now registered through the shared provider registry with a deliberately disabled default adapter. The provider can be exercised with injected local adapters for subscription validation, normalized inventory, and normalized cost records, while an ordinary registry lookup cannot initiate Azure network traffic or require credentials. Validation preserves safe fail-closed configuration errors and rejects subscription identity mismatches.
 
@@ -37,3 +37,7 @@ No Azure SDK, live credentials, external network calls, cloud mutation, hosted i
 ## Slice 4 — Fail-closed onboarding guard
 
 Azure accounts remain unavailable through the AWS-only onboarding path until a dedicated, secure connection flow is implemented. Unsupported account validation returns a controlled 400 instead of triggering an unconfigured provider adapter; serializer messaging reflects the current rollout state. No live cloud calls or credential storage are introduced.
+
+## Slice 5 — Azure registration and sync safety
+
+Azure subscription and tenant UUIDs can now be registered without credentials; registrations remain unvalidated. The existing API deliberately rejects Azure validation. Initial inventory/cost sync also explicitly rejects Azure regardless of a persisted account status, so a manually modified or stale `valid` status cannot invoke a provider adapter. No Azure SDK, credential storage, network calls, or paid resources are introduced. Future authenticated Azure support must explicitly replace both guards and add integration coverage.

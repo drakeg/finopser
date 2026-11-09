@@ -1,8 +1,10 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework.test import APIRequestFactory, force_authenticate
 
-from .account_api import connect_cloud_account
+from .account_api import connect_cloud_account, initial_sync, validate_cloud_account
 from .account_models import OnboardingProfile
 from .models import CloudAccount, Organization
 
@@ -100,3 +102,25 @@ class CloudAccountOnboardingSafetyTests(TestCase):
             force_authenticate(request, user=self.user)
             self.assertEqual(connect_cloud_account(request).status_code, expected)
         self.assertEqual(CloudAccount.objects.count(), 1)
+
+    @patch("core.account_api.sync_costs")
+    @patch("core.account_api.sync_inventory")
+    @patch("core.account_api.get_provider")
+    def test_azure_sync_and_validation_fail_closed_even_if_marked_valid(self, provider, inventory, costs):
+        account = CloudAccount.objects.create(
+            organization=self.organization,
+            provider=CloudAccount.Provider.AZURE,
+            name="Azure test",
+            provider_account_id="11111111-1111-1111-1111-111111111111",
+            role_arn="",
+            status=CloudAccount.Status.VALID,
+            metadata={"tenant_id": "22222222-2222-2222-2222-222222222222"},
+        )
+        for endpoint in (validate_cloud_account, initial_sync):
+            request = APIRequestFactory().post("/api/onboarding/azure/")
+            force_authenticate(request, user=self.user)
+            response = endpoint(request, account.pk)
+            self.assertEqual(response.status_code, 400)
+        provider.assert_not_called()
+        inventory.assert_not_called()
+        costs.assert_not_called()
