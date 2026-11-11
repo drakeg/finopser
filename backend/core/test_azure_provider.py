@@ -9,7 +9,7 @@ from .providers.registry import get_provider
 
 
 class FakeAzureAdapter:
-    def subscription(self, subscription_id, auth): return {"subscription_id":subscription_id,"resource_id":f"/subscriptions/{subscription_id}","display_name":"Dev"}
+    def subscription(self, subscription_id, auth): return {"subscription_id":subscription_id,"resource_id":f"/subscriptions/{subscription_id}","display_name":"Dev","tenant_id":auth.get("tenant_id")}
     def resources(self, subscription_id, auth): return [{"id":f"/subscriptions/{subscription_id}/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/vm1","type":"Microsoft.Compute/virtualMachines","name":"vm1","location":"eastus","tags":{"env":"dev"}}]
     def costs(self, subscription_id, auth, start_date, end_date): return [{"usage_date":start_date,"service":"Virtual Machines","region":"eastus","amount":"12.34","currency":"USD"}]
 
@@ -29,6 +29,25 @@ class AzureProviderTests(SimpleTestCase):
             def subscription(self, subscription_id, auth): return {"subscription_id":"other"}
         with self.assertRaisesMessage(ProviderValidationError,"subscription identity mismatch"):
             AzureProvider(Wrong()).validate_connection(self.connection)
+
+    def test_rejects_cross_tenant_subscription(self):
+        class WrongTenant(FakeAzureAdapter):
+            def subscription(self, subscription_id, auth):
+                return {"subscription_id": subscription_id, "tenant_id": "another-tenant"}
+        with self.assertRaisesMessage(ProviderValidationError, "tenant identity mismatch"):
+            AzureProvider(WrongTenant()).validate_connection(self.connection)
+
+    def test_rejects_missing_tenant_evidence(self):
+        class MissingTenant(FakeAzureAdapter):
+            def subscription(self, subscription_id, auth):
+                return {"subscription_id": subscription_id}
+        with self.assertRaisesMessage(ProviderValidationError, "tenant identity mismatch"):
+            AzureProvider(MissingTenant()).validate_connection(self.connection)
+
+    def test_rejects_missing_expected_tenant(self):
+        connection = ProviderConnection(provider_account_id="sub-123", auth={})
+        with self.assertRaisesMessage(ProviderValidationError, "tenant identity mismatch"):
+            self.provider.validate_connection(connection)
 
     def test_normalizes_resources(self):
         resource=self.provider.discover_resources(self.connection).resources[0]

@@ -51,6 +51,10 @@ class AzureProvider:
         actual_id = str(subscription.get("subscription_id", ""))
         if actual_id != connection.provider_account_id:
             raise ProviderValidationError("Azure validation failed: subscription identity mismatch")
+        expected_tenant = str(connection.auth.get("tenant_id", "")).strip()
+        actual_tenant = str(subscription.get("tenant_id", "")).strip()
+        if not expected_tenant or not actual_tenant or actual_tenant.lower() != expected_tenant.lower():
+            raise ProviderValidationError("Azure validation failed: tenant identity mismatch")
         return ValidationResult(provider_account_id=actual_id, arn=str(subscription.get("resource_id", "")), metadata={"display_name": str(subscription.get("display_name", ""))})
 
     def discover_resources(self, connection: ProviderConnection) -> DiscoveryResult:
