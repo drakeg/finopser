@@ -49,5 +49,5 @@ def acquire_arm_token(
             close = getattr(credential, "close", None)
             if callable(close):
                 close()
-    except Exception as exc:
+    except Exception:
         raise AzureTokenAcquisitionError("Azure token acquisition failed") from None
