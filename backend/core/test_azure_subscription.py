@@ -1,6 +1,5 @@
 import io
 import json
-from unittest.mock import Mock
 
 from django.test import SimpleTestCase
 
@@ -17,11 +16,6 @@ class AzureSubscriptionLookupTests(SimpleTestCase):
         self.config = AzureIdentityConfig.from_mapping(
             {"mode": "managed_identity", "tenant_id": self.TENANT}
         )
-
-    def _opener(self, payload):
-        response = io.BytesIO(json.dumps(payload).encode())
-        response.__enter__ = Mock(return_value=response) if hasattr(response, "__dict__") else None
-        return response
 
     def test_subscription_and_tenant_verified(self):
         payload = {"subscriptionId": self.SUB, "tenantId": self.TENANT,
