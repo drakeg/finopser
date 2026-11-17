@@ -1,6 +1,5 @@
 """Opt-in Azure ARM subscription lookup, isolated from production provider registry."""
 import json
-from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 from uuid import UUID
