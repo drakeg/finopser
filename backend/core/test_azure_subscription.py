@@ -41,7 +41,7 @@ class AzureSubscriptionLookupTests(SimpleTestCase):
             with self.subTest(payload=payload):
                 with self.assertRaises(ProviderValidationError):
                     lookup_subscription(self.SUB, self.config, token_provider=lambda config: "token",
-                                        opener=lambda request, timeout: io.BytesIO(json.dumps(payload).encode()))
+                                        opener=lambda request, timeout, payload=payload: io.BytesIO(json.dumps(payload).encode()))
 
     def test_does_not_leak_api_error(self):
         def broken(request, timeout):
