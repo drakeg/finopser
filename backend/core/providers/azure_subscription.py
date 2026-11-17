@@ -51,5 +51,5 @@ def lookup_subscription(subscription_id: str, config: AzureIdentityConfig, *,
         }
     except ProviderValidationError:
         raise
-    except (HTTPError, URLError, OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+    except Exception:
         raise ProviderValidationError("Azure subscription lookup failed") from None
