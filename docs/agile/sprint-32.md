@@ -41,3 +41,11 @@ Azure accounts remain unavailable through the AWS-only onboarding path until a d
 ## Slice 5 — Azure registration and sync safety
 
 Azure subscription and tenant UUIDs can now be registered without credentials; registrations remain unvalidated. The existing API deliberately rejects Azure validation. Initial inventory/cost sync also explicitly rejects Azure regardless of a persisted account status, so a manually modified or stale `valid` status cannot invoke a provider adapter. No Azure SDK, credential storage, network calls, or paid resources are introduced. Future authenticated Azure support must explicitly replace both guards and add integration coverage.
+
+## Current progress and next implementation gate (November 2026)
+
+Completed and merged implementation slices include credential-free Azure subscription registration, provider and sync fail-closed guards, Azure subscription/tenant identity matching, validated secretless identity configuration, runtime-only ARM token acquisition, and isolated authenticated subscription lookup (through PR #216). The historical earlier slice descriptions above record the constraints at the time of those changes; they are not a claim that the Azure SDK remains absent today.
+
+**Next P0 slice:** integrate authenticated subscription lookup into the tenant-scoped onboarding validation endpoint. Enforce membership and account ownership before token acquisition, derive tenant/subscription IDs from the stored account rather than untrusted request input, return sanitized failures, and audit success/failure without recording tokens. Cover cross-organization access, missing runtime identity, mismatch and provider failures in tests. Keep inventory and cost sync blocked until a separate reviewed rollout.
+
+**Acceptance gate:** green backend/frontend/CLI/Docker CI, no persisted tokens or client secrets, AWS regression coverage, and documented operator setup. Live cloud validation must not be enabled without explicit configuration and authorization.
