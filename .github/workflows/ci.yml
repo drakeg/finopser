@@ -6,6 +6,21 @@ on:
     branches: [main]
 
 jobs:
+  repository-standards:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate project governance and README badges
+        run: |
+          for file in README.md AGENTS.md CONTRIBUTING.md SPRINTS.md BACKLOG.md RELEASES.md; do
+            test -s "$file" || { echo "Missing or empty: $file"; exit 1; }
+          done
+          grep -q '<!-- madmallard-badges:start -->' README.md
+          grep -q '<!-- madmallard-badges:end -->' README.md
+          grep -q 'actions/workflows/ci.yml/badge.svg' README.md
+          grep -q 'img.shields.io/github/issues-pr/drakeg/finopser' README.md
+          grep -q 'img.shields.io/github/v/release/drakeg/finopser' README.md
+
   backend:
     runs-on: ubuntu-latest
     services:
