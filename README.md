@@ -1,5 +1,8 @@
 # finopser
 
+[![License](https://img.shields.io/github/license/drakeg/finopser)](https://github.com/drakeg/finopser/blob/main/LICENSE)
+
+
 <!-- madmallard-badges:start -->
 [![Python](https://img.shields.io/badge/Python-backend-3776AB?logo=python&logoColor=white)](backend/requirements.txt) [![Django](https://img.shields.io/badge/Django-6.1.3-092E20?logo=django&logoColor=white)](backend/requirements.txt) [![React](https://img.shields.io/badge/React-frontend-149ECA?logo=react&logoColor=white)](frontend/package.json) [![TypeScript](https://img.shields.io/badge/TypeScript-frontend-3178C6?logo=typescript&logoColor=white)](frontend/package.json) [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white)](compose.yaml) [![Redis](https://img.shields.io/badge/Redis-8-DC382D?logo=redis&logoColor=white)](compose.yaml)
 [![Docker Compose](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](compose.yaml) [![CI](https://github.com/drakeg/finopser/actions/workflows/ci.yml/badge.svg)](https://github.com/drakeg/finopser/actions/workflows/ci.yml) [![Tests](https://img.shields.io/badge/Tests-CI%20backend%20%7C%20frontend%20%7C%20CLI-555?logo=githubactions)](https://github.com/drakeg/finopser/actions/workflows/ci.yml) [![Releases](https://img.shields.io/github/v/release/drakeg/finopser?display_name=tag)](https://github.com/drakeg/finopser/releases)
